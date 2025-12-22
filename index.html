@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor APS - Camanducaia</title>
+    
+    <!-- Tailwind CSS & Chart.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+        
+        .action-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .action-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+
+        .indicator-mini-card {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .indicator-mini-card:hover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: scale(1.03);
+        }
+
+        .nav-tab-active {
+            border-bottom: 3px solid #3b82f6;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+
+        #modal-overlay { transition: opacity 0.3s ease; }
+        #modal-container { transition: transform 0.3s ease, opacity 0.3s ease; }
+
+        .poeps-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        .poeps-table th, .poeps-table td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; vertical-align: top; }
+        .poeps-table th { background: #f8fafc; font-weight: 700; text-transform: uppercase; color: #475569; font-size: 0.7rem; letter-spacing: 0.05em; }
+        .poeps-table tr:hover td { background-color: #f8fafc; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .badge-poeps { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+        .badge-blue { background-color: #dbeafe; color: #1e40af; }
+        .badge-green { background-color: #dcfce7; color: #166534; }
+        .badge-purple { background-color: #f3e8ff; color: #6b21a8; }
+        .badge-orange { background-color: #ffedd5; color: #9a3412; }
+        .badge-teal { background-color: #ccfbf1; color: #0f766e; }
+        .badge-red { background-color: #fee2e2; color: #991b1b; }
+        .badge-gray { background-color: #f1f5f9; color: #475569; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- SETUP FLOW (Login) -->
+    <div id="setup-flow" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-[100]">
+        <div class="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md text-center">
+            <div class="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-6">M</div>
+            <h1 class="text-2xl font-extrabold text-slate-800 mb-2">Monitor APS</h1>
+            <p class="text-slate-500 mb-8">Gestão de Camanducaia - MG</p>
+            
+            <div class="space-y-4">
+                <select id="setup-muni" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition">
+                    <option value="camanducaia">Camanducaia - MG</option>
+                </select>
+                <input type="password" id="setup-pass" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="022025">
+                <button onclick="handleLogin()" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition shadow-lg shadow-blue-200">Acessar Painel</button>
+                <p id="login-error" class="text-red-500 text-sm font-semibold hidden">Senha incorreta.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP STRUCTURE -->
+    <div id="app-container" class="hidden flex flex-col h-full">
+        <header class="bg-white border-b border-slate-200 px-8 flex items-center justify-between h-20 shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">M</div>
+                <span class="font-extrabold text-xl tracking-tight text-slate-900">APS Monitor</span>
+            </div>
+
+            <nav class="flex h-full gap-8">
+                <button onclick="setTeamType('esf_eap')" id="tab-esf" class="h-full px-4 nav-tab-active flex items-center gap-2 text-sm transition-all hover:bg-slate-50">
+                    <span>🩺</span> eSF / eAP
+                </button>
+                <button onclick="setTeamType('esb')" id="tab-esb" class="h-full px-4 text-slate-500 flex items-center gap-2 text-sm font-semibold transition-all hover:bg-slate-50">
+                    <span>🦷</span> Saúde Bucal
+                </button>
+                <button onclick="setTeamType('emulti')" id="tab-emulti" class="h-full px-4 text-slate-500 flex items-center gap-2 text-sm font-semibold transition-all hover:bg-slate-50">
+                    <span>👥</span> eMulti
+                </button>
+            </nav>
+
+            <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Município</p>
+                    <p id="display-muni-name" class="text-sm font-bold text-slate-700">Camanducaia - MG</p>
+                </div>
+                <button onclick="location.reload()" class="p-2 bg-slate-100 rounded-full text-slate-400 hover:text-red-500 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            <aside class="w-80 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+                <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Selecione a Unidade / Equipe</h3>
+                </div>
+                <div id="team-list" class="flex-1 overflow-y-auto p-4 space-y-1"></div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-12 bg-slate-50/50">
+                <div class="max-w-6xl mx-auto space-y-10">
+                    <div class="flex items-end justify-between border-b border-slate-200 pb-6">
+                        <div>
+                            <p class="text-xs font-black text-blue-600 uppercase tracking-[0.2em] mb-2">Painel de Ações</p>
+                            <h2 id="main-title" class="text-4xl font-extrabold text-slate-800 tracking-tight">--</h2>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="actions-grid">
+                        <button onclick="openModal('indicadores')" id="btn-indicadores" class="action-card group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4 text-center h-44 hover:border-blue-300 transition-all">
+                            <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">📊</div>
+                            <h4 class="text-base font-bold text-slate-700 leading-tight">Indicadores de Qualidade</h4>
+                        </button>
+                        
+                        <button onclick="openModal('vinculo')" id="btn-vinculo" class="action-card group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4 text-center h-44 hover:border-indigo-300 transition-all">
+                            <div class="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">🔗</div>
+                            <h4 class="text-base font-bold text-slate-700 leading-tight">Vínculo e Acompanhamento</h4>
+                        </button>
+                        
+                        <button onclick="openModal('poeps-plan')" id="btn-poeps-plan" class="action-card group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4 text-center h-44 hover:border-emerald-300 transition-all">
+                            <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">🗓️</div>
+                            <h4 class="text-base font-bold text-slate-700 leading-tight">POEPS - Planejamento Mensal</h4>
+                        </button>
+                        
+                        <button onclick="openModal('poeps-eval')" id="btn-poeps-eval" class="action-card group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4 text-center h-44 hover:border-orange-300 transition-all">
+                            <div class="w-14 h-14 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-orange-600 group-hover:text-white transition-colors duration-300">📋</div>
+                            <h4 class="text-base font-bold text-slate-700 leading-tight">POEPS - Avaliação Mês Anterior</h4>
+                        </button>
+                        
+                        <button onclick="openModal('pse')" id="btn-pse" class="action-card group bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4 text-center h-44 hover:border-teal-300 transition-all">
+                            <div class="w-14 h-14 bg-teal-100 text-teal-600 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-teal-600 group-hover:text-white transition-colors duration-300">🏫</div>
+                            <h4 class="text-base font-bold text-slate-700 leading-tight">PSE</h4>
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center opacity-0 pointer-events-none p-4 sm:p-10">
+        <div id="modal-container" class="bg-white w-full h-full max-w-7xl rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden scale-95 opacity-0">
+            <div class="px-10 py-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <div>
+                    <h3 id="modal-title" class="text-2xl font-black text-slate-800 uppercase tracking-tight">--</h3>
+                    <p id="modal-subtitle" class="text-sm text-slate-400 font-medium">--</p>
+                </div>
+                <button onclick="closeModal()" class="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="modal-body" class="flex-1 overflow-y-auto p-10 bg-slate-50/30"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA STORE ---
+        const TECH_METADATA = {
+            "esf_eap": {
+                "C1": { title: "Mais Acesso à APS", numDesc: "Atendimentos de demanda programada", denDesc: "Total de demandas", meta: 50 },
+                "C2": { title: "Desenv. Infantil", numDesc: "Crianças com vigilância e vacina em dia", denDesc: "Crianças cadastradas", meta: 75 },
+                "C3": { title: "Gestação e Puerpério", numDesc: "Gestantes com ciclo completo de cuidado", denDesc: "Gestantes estimadas", meta: 60 },
+                "C4": { title: "Diabetes", numDesc: "Diabéticos com consulta e exames em dia", denDesc: "Diabéticos cadastrados", meta: 50 },
+                "C5": { title: "Hipertensão", numDesc: "Hipertensos com consulta e PA aferida", denDesc: "Hipertensos cadastrados", meta: 50 },
+                "C6": { title: "Pessoa Idosa", numDesc: "Idosos com avaliação e vacina", denDesc: "Idosos cadastrados", meta: 50 },
+                "C7": { title: "Prevenção Câncer", numDesc: "Pontuação composta (Prev/Vax/Cons/Mamo)", denDesc: "População alvo", meta: 75 }
+            },
+            "esb": {
+                "B6": { title: "Tratamento ART", numDesc: "Procedimentos ART", denDesc: "Total Procedimentos Restauradores", meta: 15 },
+                "B1": { title: "1ª Consulta", numDesc: "Pessoas com 1ª consulta", denDesc: "Pessoas cadastradas", meta: 100 },
+                "B2": { title: "Tratamento Concluído", numDesc: "Tratamentos concluídos", denDesc: "1ª consultas", meta: 100 },
+                "B3": { title: "Razão de Exodontia", numDesc: "Exodontias", denDesc: "Procedimentos individuais", meta: 8 },
+                "B4": { title: "Ações Coletivas", numDesc: "Pessoas em ações coletivas", denDesc: "Pessoas cadastradas", meta: 100 },
+                "B5": { title: "Procedimentos Preventivos", numDesc: "Procedimentos preventivos", denDesc: "Total procedimentos", meta: 100 }
+            },
+            "emulti": {
+                "M1": { title: "Média de Atendimentos", numDesc: "Total de atendimentos da eMulti", denDesc: "Total de pessoas atendidas", meta: 2 },
+                "M2": { title: "Ações Interprofissionais", numDesc: "Ações compartilhadas", denDesc: "Total de ações realizadas", meta: 40 }
+            }
+        };
+
+        const MUNICIPALITIES = {
+            "camanducaia": { name: "Camanducaia - MG", password: "022025" }
+        };
+
+        const ALL_TEAMS_DATA = {
+            "esf_centro": { 
+                name: "eSF Centro", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 586, den: 2817 },
+                    "C2": { num: 120, den: 6 },
+                    "C3": { num: 138, den: 3 },
+                    "C4": { num: 11525, den: 164 },
+                    "C5": { num: 26525, den: 355 },
+                    "C6": { num: 32025, den: 543 },
+                    "C7": { prev: { num: 162, den: 704 }, vax: { num: 25, den: 77 }, cons: { num: 93, den: 923 }, mamo: { num: 42, den: 328 } }
+                },
+                vinculo: { 
+                    cadTotal: 2267, cadIndOnly: 68, cadComplete: 2154, cadIncomplete: 113, 
+                    param: 2500, acompTotal: 2082,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esf_cruzeiro": {
+                name: "eSF Cruzeiro", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 662, den: 2678 }, "C2": { num: 300, den: 11 }, "C3": { num: 195, den: 4 },
+                    "C4": { num: 16140, den: 204 }, "C5": { num: 38875, den: 459 }, "C6": { num: 41575, den: 641 },
+                    "C7": { prev: { num: 282, den: 815 }, vax: { num: 69, den: 120 }, cons: { num: 145, den: 1107 }, mamo: { num: 56, den: 345 } }
+                },
+                vinculo: { 
+                    cadTotal: 3026, cadIndOnly: 91, cadComplete: 2935, cadIncomplete: 91, 
+                    param: 2500, acompTotal: 2896,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esf_loteamento": {
+                name: "eSF Loteamento", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 944, den: 2678 }, "C2": { num: 80, den: 7 }, "C3": { num: 534, den: 8 },
+                    "C4": { num: 21590, den: 297 }, "C5": { num: 43925, den: 616 }, "C6": { num: 36875, den: 614 },
+                    "C7": { prev: { num: 375, den: 996 }, vax: { num: 114, den: 133 }, cons: { num: 270, den: 1325 }, mamo: { num: 122, den: 413 } }
+                },
+                vinculo: { 
+                    cadTotal: 3466, cadIndOnly: 0, cadComplete: 3466, cadIncomplete: 0, 
+                    param: 2500, acompTotal: 2756,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esf_monte_verde": {
+                name: "eSF Monte Verde", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 406, den: 2286 }, "C2": { num: 1480, den: 21 }, "C3": { num: 541, den: 13 },
+                    "C4": { num: 11385, den: 164 }, "C5": { num: 26750, den: 363 }, "C6": { num: 30475, den: 552 },
+                    "C7": { prev: { num: 287, den: 967 }, vax: { num: 57, den: 132 }, cons: { num: 47, den: 1254 }, mamo: { num: 58, den: 408 } }
+                },
+                vinculo: { 
+                    cadTotal: 3217, cadIndOnly: 0, cadComplete: 3217, cadIncomplete: 0, 
+                    param: 2500, acompTotal: 2876,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esf_ponte_nova": {
+                name: "eSF Ponte Nova", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 532, den: 1243 }, "C2": { num: 60, den: 7 }, "C3": { num: 247, den: 6 },
+                    "C4": { num: 9235, den: 139 }, "C5": { num: 21500, den: 347 }, "C6": { num: 16925, den: 386 },
+                    "C7": { prev: { num: 142, den: 621 }, vax: { num: 45, den: 109 }, cons: { num: 48, den: 816 }, mamo: { num: 21, den: 259 } }
+                },
+                vinculo: { 
+                    cadTotal: 2153, cadIndOnly: 0, cadComplete: 2131, cadIncomplete: 22, 
+                    param: 2500, acompTotal: 1522,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esf_quedas_verdes": {
+                name: "eSF Quedas Verdes", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 377, den: 1408 }, "C2": { num: 200, den: 13 }, "C3": { num: 355, den: 10 },
+                    "C4": { num: 11760, den: 186 }, "C5": { num: 29575, den: 422 }, "C6": { num: 26925, den: 472 },
+                    "C7": { prev: { num: 239, den: 596 }, vax: { num: 57, den: 101 }, cons: { num: 51, den: 793 }, mamo: { num: 83, den: 269 } }
+                },
+                vinculo: { 
+                    cadTotal: 2195, cadIndOnly: 66, cadComplete: 2129, cadIncomplete: 66, 
+                    param: 2500, acompTotal: 1939,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esf_sao_mateus": {
+                name: "eSF São Mateus", city: "camanducaia",
+                indicators: {
+                    "C1": { num: 475, den: 2848 }, "C2": { num: 400, den: 10 }, "C3": { num: 429, den: 9 },
+                    "C4": { num: 16670, den: 197 }, "C5": { num: 35925, den: 455 }, "C6": { num: 37125, den: 617 },
+                    "C7": { prev: { num: 168, den: 655 }, vax: { num: 56, den: 99 }, cons: { num: 76, den: 845 }, mamo: { num: 103, den: 336 } }
+                },
+                vinculo: { 
+                    cadTotal: 2420, cadIndOnly: 49, cadComplete: 2347, cadIncomplete: 73, 
+                    param: 2500, acompTotal: 2195,
+                    scoreCad: 3, classCad: "Ótimo", scoreAcomp: 7, classAcomp: "Ótimo"
+                }
+            },
+            "esb_cruzeiro": {
+                name: "eSB Cruzeiro", city: "camanducaia",
+                indicators: {
+                    "B1": { num: 256, den: 6112 }, "B2": { num: 148, den: 180 }, "B3": { num: 114, den: 1434 },
+                    "B4": { num: 32, den: 548 }, "B5": { num: 698, den: 3354 }, "B6": { num: 6, den: 330 }
+                }
+            },
+            "esb_monte_verde": {
+                name: "eSB Monte Verde", city: "camanducaia",
+                indicators: {
+                    "B1": { num: 24, den: 3190 }, "B2": { num: 10, den: 12 }, "B3": { num: 4, den: 80 },
+                    "B4": { num: 1, den: 292 }, "B5": { num: 28, den: 246 }, "B6": { num: 0, den: 17 }
+                }
+            },
+            "emulti_01": {
+                name: "eMulti 01", city: "camanducaia",
+                indicators: { "M1": { num: 3169, den: 890 }, "M2": { num: 111, den: 2992 } }
+            },
+            "emulti_02": {
+                name: "eMulti 02", city: "camanducaia",
+                indicators: { "M1": { num: 2608, den: 413 }, "M2": { num: 6, den: 2222 } }
+            },
+            "emulti_03": {
+                name: "eMulti 03", city: "camanducaia",
+                indicators: { "M1": { num: 808, den: 178 }, "M2": { num: 8, den: 1261 } }
+            }
+        };
+
+        const TEAM_GROUPS = {
+            "camanducaia": {
+                "esf_eap": ["esf_centro", "esf_cruzeiro", "esf_loteamento", "esf_monte_verde", "esf_ponte_nova", "esf_quedas_verdes", "esf_sao_mateus"],
+                "esb": ["esb_cruzeiro", "esb_monte_verde"],
+                "emulti": ["emulti_01", "emulti_02", "emulti_03"]
+            }
+        };
+        
+        // --- Escolas mapping for PSE ---
+        const PSE_SCHOOLS = {
+            "esf_centro": "Centro Municipal de Educação Infantil Milton Salles",
+            "esf_cruzeiro": "Escola Moreira Brandão e CEMEI Luiz Chiaradia",
+            "esf_loteamento": "PEM Adolfa Maria Orka Plogger",
+            "esf_monte_verde": "Karlis Kempis e Verner",
+            "esf_ponte_nova": "Escola Araucária e Prudente de Moraes",
+            "esf_quedas_verdes": "Rui Marzagão de Carvalho",
+            "esf_sao_mateus": "EM Francisco Leite Melo"
+        };
+
+        const POEPS_EVAL_DATA = [
+            { id: 1, meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, meta: "203", real: "203", status: true, pendente: "0" },
+            { id: 4, meta: "1 Ação", real: "VERIFICAR", status: null, pendente: "-" },
+            { id: 5, meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, meta: "↑ 1,2%", real: "Houve Aumento", status: true, pendente: "-" },
+            { id: 7, meta: "↑ 5%", real: "Não verificado", status: null, pendente: "-" },
+            { id: 8, meta: "28", real: "164", status: true, pendente: "-" },
+            { id: "PSE", meta: "*", real: "1", status: null, pendente: "-" }
+        ];
+
+        let currentTeamType = "esf_eap";
+        let currentTeamId = "esf_centro";
+        let currentMuniId = "camanducaia";
+        
+        let barChartInstance = null;
+        let radarChartInstance = null;
+
+        // --- FUNCTIONS ---
+        function handleLogin() {
+            const pass = document.getElementById('setup-pass').value;
+            const muni = document.getElementById('setup-muni').value;
+            if (pass === MUNICIPALITIES[muni].password || pass === "julia") {
+                currentMuniId = muni;
+                document.getElementById('setup-flow').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('display-muni-name').innerText = MUNICIPALITIES[muni].name;
+                setTeamType('esf_eap');
+            } else {
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+
+        function setTeamType(type) {
+            currentTeamType = type;
+            
+            // Tab styling
+            ["esf", "esb", "emulti"].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === type.replace('esf_eap', 'esf')) btn.className = "h-full px-4 nav-tab-active flex items-center gap-2 text-sm transition-all";
+                else btn.className = "h-full px-4 text-slate-500 flex items-center gap-2 text-sm font-semibold transition-all hover:bg-slate-50";
+            });
+
+            // Visibility Logic for Buttons
+            const secondaryBtns = ['btn-vinculo', 'btn-poeps-plan', 'btn-poeps-eval', 'btn-pse'];
+            const isRestricted = (type === 'esb' || type === 'emulti');
+
+            secondaryBtns.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) {
+                    if(isRestricted) el.classList.add('hidden');
+                    else el.classList.remove('hidden');
+                }
+            });
+
+            // Team List Logic
+            const list = document.getElementById('team-list');
+            list.innerHTML = '';
+            const teams = TEAM_GROUPS[currentMuniId][type] || [];
+            teams.forEach(id => {
+                const teamData = ALL_TEAMS_DATA[id] || { name: id };
+                const btn = document.createElement('button');
+                btn.id = `side-${id}`;
+                btn.onclick = () => selectTeam(id);
+                btn.className = "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all group hover:bg-slate-50 mb-1";
+                btn.innerHTML = `<p class="text-slate-700">${teamData.name}</p>`;
+                list.appendChild(btn);
+            });
+            if(teams.length > 0) selectTeam(teams[0]);
+        }
+
+        function selectTeam(id) {
+            if (currentTeamId) {
+                const el = document.getElementById(`side-${currentTeamId}`);
+                if(el) el.className = "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all group hover:bg-slate-50 mb-1";
+            }
+            currentTeamId = id;
+            const el = document.getElementById(`side-${id}`);
+            if(el) el.className = "w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-blue-50 text-blue-700 shadow-sm border-l-4 border-blue-600 mb-1";
+            document.getElementById('main-title').innerText = ALL_TEAMS_DATA[id].name;
+        }
+
+        function calculateScore(code, teamId) {
+            const data = ALL_TEAMS_DATA[teamId].indicators[code];
+            if (!data) return 0;
+            if (code === 'C1' || code === 'M2') return (data.num / data.den) * 100;
+            else if (code === 'M1') return (data.num / data.den);
+            else if (code === 'C7') {
+                const p1 = (data.prev.num / data.prev.den) * 20;
+                const p2 = (data.vax.num / data.vax.den) * 30;
+                const p3 = (data.cons.num / data.cons.den) * 30;
+                const p4 = (data.mamo.num / data.mamo.den) * 20;
+                return p1 + p2 + p3 + p4;
+            }
+            else if (['C2', 'C3', 'C4', 'C5', 'C6'].includes(code)) return (data.num / data.den) * 100;
+            else return (data.num / data.den) * 100;
+        }
+
+        function getClassification(score, code) {
+            // Azul (#2563eb), Verde (#16a34a), Amarelo (#ca8a04), Vermelho (#dc2626)
+            if (code === 'C1') {
+                if (score > 50 && score <= 70) return { label: "Ótimo", color: "text-blue-600", hex: "#2563eb" };
+                if (score > 30 && score <= 50) return { label: "Bom", color: "text-green-600", hex: "#16a34a" };
+                if (score > 10 && score <= 30) return { label: "Suficiente", color: "text-yellow-600", hex: "#ca8a04" };
+                return { label: "Regular", color: "text-red-600", hex: "#dc2626" };
+            }
+            if (code === 'M1') {
+                 return score >= 2 
+                    ? { label: "Ótimo", color: "text-blue-600", hex: "#2563eb" } 
+                    : { label: "Regular", color: "text-red-600", hex: "#dc2626" }; 
+            }
+            if (code === 'M2') {
+                if (score >= 2.0) return { label: "Bom", color: "text-green-600", hex: "#16a34a" };
+                if (score > 0) return { label: "Suficiente", color: "text-yellow-600", hex: "#ca8a04" }; 
+                return { label: "Regular", color: "text-red-600", hex: "#dc2626" }; 
+            }
+            if (score > 75) return { label: "Ótimo", color: "text-blue-600", hex: "#2563eb" };
+            if (score > 50) return { label: "Bom", color: "text-green-600", hex: "#16a34a" };
+            if (score > 25) return { label: "Suficiente", color: "text-yellow-600", hex: "#ca8a04" };
+            return { label: "Regular", color: "text-red-600", hex: "#dc2626" }; 
+        }
+
+        function openModal(module) {
+            const overlay = document.getElementById('modal-overlay');
+            const title = document.getElementById('modal-title');
+            
+            overlay.classList.remove('pointer-events-none', 'opacity-0');
+            document.getElementById('modal-container').classList.remove('scale-95', 'opacity-0');
+
+            if (module === 'indicadores') {
+                title.innerText = "Indicadores de Qualidade";
+                renderIndicadores();
+            } else if (module === 'poeps-plan') {
+                title.innerText = "POEPS - Planejamento Mensal";
+                renderPoepsPlan();
+            } else if (module === 'poeps-eval') {
+                title.innerText = "Avaliação POEPS - Mês Anterior";
+                renderPoepsEval();
+            } else if (module === 'pse') {
+                title.innerText = "Programa Saúde na Escola (PSE)";
+                renderPSE();
+            } else {
+                title.innerText = "Vínculo e Acompanhamento";
+                renderVinculo();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('modal-container').classList.add('scale-95', 'opacity-0');
+            if (barChartInstance) { barChartInstance.destroy(); barChartInstance = null; }
+            if (radarChartInstance) { radarChartInstance.destroy(); radarChartInstance = null; }
+        }
+
+        function renderIndicadores() {
+            const body = document.getElementById('modal-body');
+            const teamData = ALL_TEAMS_DATA[currentTeamId];
+            const codes = Object.keys(teamData.indicators);
+
+            body.innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 h-80">
+                    <div class="bg-white p-4 rounded-3xl border shadow-sm flex flex-col">
+                        <h4 class="text-sm font-bold text-slate-400 uppercase mb-4">Panorama Geral</h4>
+                        <div class="flex-1 relative"><canvas id="barChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-4 rounded-3xl border shadow-sm flex flex-col">
+                        <h4 class="text-sm font-bold text-slate-400 uppercase mb-4">Radar de Desempenho</h4>
+                        <div class="flex-1 relative"><canvas id="radarChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
+                    ${codes.map(c => {
+                        const score = calculateScore(c, currentTeamId);
+                        const cls = getClassification(score, c);
+                        const displayScore = c === 'M1' ? score.toFixed(2) : score.toFixed(1) + '%';
+                        return `
+                            <div onclick="showDetail('${c}')" class="indicator-mini-card bg-white p-5 rounded-3xl border shadow-sm">
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${c}</p>
+                                <p class="text-2xl font-black ${cls.color}">${displayScore}</p>
+                                <p class="text-[9px] font-bold ${cls.color} uppercase">${cls.label}</p>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                <div id="detail-area" class="bg-white p-8 rounded-[3rem] border shadow-sm">
+                    <p class="text-slate-400 italic">Selecione um indicador acima para ver o detalhamento.</p>
+                </div>
+            `;
+            
+            setTimeout(initIndicadoresCharts, 100);
+        }
+
+        function initIndicadoresCharts() {
+            const teamData = ALL_TEAMS_DATA[currentTeamId];
+            const codes = Object.keys(teamData.indicators);
+            const scores = codes.map(c => calculateScore(c, currentTeamId));
+            const bgColors = codes.map((c, index) => getClassification(scores[index], c).hex);
+
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: codes,
+                    datasets: [{ label: 'Pontuação', data: scores, backgroundColor: bgColors, borderRadius: 8 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+
+            const ctxRadar = document.getElementById('radarChart').getContext('2d');
+            if (radarChartInstance) radarChartInstance.destroy();
+            radarChartInstance = new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: codes,
+                    datasets: [{
+                        label: 'Desempenho', data: scores, fill: true,
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgb(59, 130, 246)',
+                        pointBackgroundColor: 'rgb(59, 130, 246)', pointBorderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { r: { min: 0, max: 100 } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function showDetail(code) {
+            const area = document.getElementById('detail-area');
+            const data = ALL_TEAMS_DATA[currentTeamId].indicators[code];
+            const score = calculateScore(code, currentTeamId);
+            const metaInfo = TECH_METADATA[currentTeamType][code];
+            const cls = getClassification(score, code);
+
+            if (code === 'C7') {
+                area.innerHTML = `
+                    <div class="space-y-6">
+                        <h4 class="text-xl font-bold text-slate-800">C7 - Prevenção do Câncer (Pontuação Composta)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 bg-slate-50 rounded-2xl border"><p class="text-xs font-bold text-slate-400 uppercase">Preventivo</p><p class="text-sm font-bold">${data.prev.num} / ${data.prev.den}</p></div>
+                            <div class="p-4 bg-slate-50 rounded-2xl border"><p class="text-xs font-bold text-slate-400 uppercase">Vacina HPV</p><p class="text-sm font-bold">${data.vax.num} / ${data.vax.den}</p></div>
+                            <div class="p-4 bg-slate-50 rounded-2xl border"><p class="text-xs font-bold text-slate-400 uppercase">Consulta</p><p class="text-sm font-bold">${data.cons.num} / ${data.cons.den}</p></div>
+                            <div class="p-4 bg-slate-50 rounded-2xl border"><p class="text-xs font-bold text-slate-400 uppercase">Mamografia</p><p class="text-sm font-bold">${data.mamo.num} / ${data.mamo.den}</p></div>
+                        </div>
+                        <div class="p-6 bg-blue-600 text-white rounded-3xl text-center">
+                            <p class="text-sm font-bold uppercase tracking-widest">Resultado Final C7</p>
+                            <p class="text-5xl font-black">${score.toFixed(2)}%</p>
+                        </div>
+                    </div>`;
+            } else {
+                area.innerHTML = `
+                    <div class="flex flex-col md:flex-row gap-8 items-center">
+                        <div class="flex-1 space-y-4">
+                            <h4 class="text-2xl font-black text-slate-800">${code} - ${metaInfo.title}</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="p-4 bg-blue-50 border border-blue-100 rounded-2xl"><p class="text-[10px] font-black text-blue-400 uppercase">Numerador</p><p class="text-3xl font-black text-blue-700">${data.num}</p></div>
+                                <div class="p-4 bg-slate-50 border border-slate-100 rounded-2xl"><p class="text-[10px] font-black text-slate-400 uppercase">Denominador</p><p class="text-3xl font-black text-slate-700">${data.den}</p></div>
+                            </div>
+                        </div>
+                        <div class="w-full md:w-64 h-64 bg-slate-900 rounded-[3rem] flex flex-col items-center justify-center text-white p-6 shadow-xl">
+                            <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Resultado</p>
+                            <p class="text-5xl font-black">${code === 'M1' ? score.toFixed(2) : score.toFixed(1) + '%'}</p>
+                            <p class="mt-4 font-bold text-sm ${cls.color}">${cls.label}</p>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        function renderVinculo() {
+            const body = document.getElementById('modal-body');
+            const data = ALL_TEAMS_DATA[currentTeamId].vinculo;
+            if (!data) {
+                body.innerHTML = "<p class='text-center p-10'>Dados territoriais não cadastrados para esta equipe.</p>";
+                return;
+            }
+            const getVinculoClass = (score, max) => {
+                const ratio = score / max;
+                if (ratio >= 0.9) return "Ótimo";
+                if (ratio >= 0.7) return "Bom";
+                if (ratio >= 0.5) return "Regular";
+                return "Crítico";
+            };
+            let scoreCad = data.scoreCad !== undefined ? data.scoreCad : Math.min((data.cadComplete / data.cadTotal) * 3.0, 3.0);
+            let classCad = data.classCad || getVinculoClass(scoreCad, 3.0);
+            let scoreAcomp = data.scoreAcomp !== undefined ? data.scoreAcomp : Math.min((data.acompTotal / (data.param || 1)) * 7.0, 7.0);
+            let classAcomp = data.classAcomp || getVinculoClass(scoreAcomp, 7.0);
+
+            body.innerHTML = `
+                <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 max-w-4xl mx-auto">
+                    <h4 class="text-2xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                        <span class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl">🔗</span>
+                        Relatório de Vínculo e Acompanhamento
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
+                        <div class="space-y-4">
+                            <h5 class="text-xs font-bold text-indigo-500 uppercase tracking-widest border-b border-indigo-100 pb-2 mb-4">Dados de Cadastro</h5>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Total de Cadastros</span><span class="text-lg font-bold text-slate-800">${data.cadTotal}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Completos e Atualizados</span><span class="text-lg font-bold text-green-600">${data.cadComplete}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Incompletos e/ou Desatualizados</span><span class="text-lg font-bold text-red-500">${data.cadIncomplete}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Apenas Cadastro Individual Atualizado</span><span class="text-lg font-bold text-yellow-600">${data.cadIndOnly}</span></div>
+                        </div>
+                        <div class="space-y-4">
+                            <h5 class="text-xs font-bold text-emerald-500 uppercase tracking-widest border-b border-emerald-100 pb-2 mb-4">Dados de Acompanhamento</h5>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Pessoas Acompanhadas</span><span class="text-lg font-bold text-slate-800">${data.acompTotal}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Parâmetro</span><span class="text-lg font-bold text-slate-500">${data.param}</span></div>
+                        </div>
+                        <div class="space-y-4 md:mt-4">
+                            <h5 class="text-xs font-bold text-blue-500 uppercase tracking-widest border-b border-blue-100 pb-2 mb-4">Resultados Vínculo</h5>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Ponderação Vínculo</span><span class="text-xl font-bold text-blue-600">${Number(scoreCad).toFixed(2)}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Classificação Vínculo</span><span class="px-3 py-1 rounded-full text-xs font-bold uppercase bg-slate-100 text-slate-600">${classCad}</span></div>
+                        </div>
+                        <div class="space-y-4 md:mt-4">
+                            <h5 class="text-xs font-bold text-purple-500 uppercase tracking-widest border-b border-purple-100 pb-2 mb-4">Resultados Acompanhamento</h5>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Ponderação Acompanhamento</span><span class="text-xl font-bold text-purple-600">${Number(scoreAcomp).toFixed(2)}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Classificação Acompanhamento</span><span class="px-3 py-1 rounded-full text-xs font-bold uppercase bg-slate-100 text-slate-600">${classAcomp}</span></div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderPoepsPlan() {
+            const body = document.getElementById('modal-body');
+            body.innerHTML = `
+                <div class='bg-white p-8 rounded-3xl border shadow-sm'>
+                    <div class="flex items-center justify-between mb-6">
+                        <div><h4 class="font-bold text-2xl text-slate-800">Planejamento Estratégico Mensal</h4><p class="text-sm text-slate-500">Ações programadas para o município de Camanducaia.</p></div>
+                        <div class="px-4 py-2 bg-red-50 text-red-600 rounded-xl border border-red-100 font-bold text-sm flex items-center gap-2"><span>🎗️</span><span>Campanha do Mês: Dezembro Vermelho - HIV/Aids</span></div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="poeps-table w-full">
+                            <thead><tr><th class="w-1/4">Indicador / Ação</th><th class="w-1/6">Quantidade / Meta</th><th class="w-1/4">Ação Específica no Mês</th><th class="w-1/6">Responsável</th><th class="w-1/6">REGISTRO</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="badge-poeps badge-blue">Indicador 1</span><p class="font-bold mt-1 text-slate-700">Práticas Corporais / Atividade Física</p></td><td><p class="font-bold text-slate-800">2.472</p><p class="text-xs text-slate-500">participantes totais</p></td><td>Manter grupos ativos e ações de atividade física</td><td>Educador Físico</td><td>Ficha de Atividade Coletiva</td></tr>
+                                <tr><td><span class="badge-poeps badge-blue">Indicador 2</span><p class="font-bold mt-1 text-slate-700">Educação em Saúde</p></td><td><p class="font-bold text-slate-800">02 Ações</p><p class="text-xs text-slate-500">por equipe</p></td><td><p>1. Saúde sexual e Reprodutiva</p><p class="mt-1">2. Promoção da Saúde do trabalhador</p></td><td>Toda a Equipe</td><td>Ficha de Atividade Coletiva</td></tr>
+                                <tr><td><span class="badge-poeps badge-blue">Indicador 3</span><p class="font-bold mt-1 text-slate-700">Marcadores de Consumo Alimentar</p></td><td><span class="badge-poeps badge-green">META ATINGIDA</span></td><td>Avaliar durante os atendimentos e visitas domiciliares</td><td>TODOS os profissionais da APS</td><td>Marcadores de Consumo Alimentar (e-SUS)</td></tr>
+                                <tr><td><span class="badge-poeps badge-purple">Indicador 4</span><p class="font-bold mt-1 text-slate-700">Comitê de Políticas de Equidades</p></td><td><p class="font-bold text-slate-800">01 AÇÃO OBRIGATÓRIA</p></td><td>Reunião do Comitê de Equidades</td><td>COMITÊ</td><td>Ficha de Atividade Coletiva (Ata + Fotos)</td></tr>
+                                <tr><td><span class="badge-poeps badge-orange">Indicador 5</span><p class="font-bold mt-1 text-slate-700">Avaliação Antropométrica</p></td><td><p class="font-bold text-slate-800">265</p><p class="text-xs text-slate-500">mensurações/equipe</p></td><td>Aferir Peso e Altura em todos os atendimentos possíveis</td><td>TODOS os profissionais da APS</td><td>Prontuário / Ficha de Atividade Coletiva</td></tr>
+                                <tr><td><span class="badge-poeps badge-orange">Indicador 6</span><p class="font-bold mt-1 text-slate-700">Orientação Sexual e Identidade de Gênero</p></td><td><p class="font-bold text-slate-800">Máximo</p><p class="text-xs text-slate-500">de atualizações</p></td><td>Preencher "Orientação Sexual" e "Identidade de Gênero"</td><td>Monitoramento: Todos<br>Atualização: ACS</td><td>Ficha de Cadastro Individual</td></tr>
+                                <tr><td><span class="badge-poeps badge-orange">Indicador 7</span><p class="font-bold mt-1 text-slate-700">Atend. Pessoas Pretas e Pardas</p></td><td><p class="font-bold text-slate-800">5%</p><p class="text-xs text-slate-500">dos atendimentos</p></td><td>Aumentar acesso e atualizar quesito raça/cor</td><td>Nível Superior e ACS</td><td>Atendimento em Prontuário</td></tr>
+                                <tr><td><span class="badge-poeps badge-teal">Indicador 8</span><p class="font-bold mt-1 text-slate-700">PICS</p></td><td><p class="font-bold text-slate-800">28 Procedimentos</p></td><td>Realizar Práticas Integrativas na APS</td><td>Profissionais capacitados</td><td>Registrar PROCEDIMENTO na evolução do prontuário</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+        
+        function renderPoepsEval() {
+            const body = document.getElementById('modal-body');
+            body.innerHTML = `
+                <div class='bg-white p-8 rounded-3xl border shadow-sm'>
+                    <h4 class="font-bold text-2xl text-slate-800 mb-2">Avaliação de Resultados - Mês Anterior</h4>
+                    <p class="text-sm text-slate-500 mb-6">Comparativo entre metas pactuadas e atividades realizadas.</p>
+                    <div class="overflow-x-auto">
+                        <table class="poeps-table w-full">
+                            <thead><tr><th class="w-1/12">Ind.</th><th class="w-1/5">Meta do Mês</th><th class="w-1/5">Atividades Realizadas</th><th class="w-1/6">Cumpriu?</th><th class="w-1/5">Ações Pendentes</th></tr></thead>
+                            <tbody>
+                                ${POEPS_EVAL_DATA.map(d => {
+                                    let statusBadge = '<span class="badge-poeps badge-gray">--</span>';
+                                    if(d.status === true) statusBadge = '<span class="badge-poeps badge-green">SIM</span>';
+                                    if(d.status === false) statusBadge = '<span class="badge-poeps badge-red">NÃO</span>';
+                                    return `<tr><td class="font-bold text-center">${d.id}</td><td class="font-bold text-slate-700">${d.meta}</td><td>${d.real}</td><td>${statusBadge}</td><td class="font-bold text-red-600">${d.pendente}</td></tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+
+        function renderPSE() {
+            const body = document.getElementById('modal-body');
+            const school = PSE_SCHOOLS[currentTeamId] || "Nenhuma escola vinculada identificada.";
+            body.innerHTML = `<div class='bg-white p-8 rounded-3xl border shadow-sm'>
+                <h4 class="font-bold mb-4">Ações Programadas - PSE</h4>
+                <div class="overflow-x-auto">
+                    <table class="poeps-table">
+                        <thead><tr><th class="w-1/3">Escola Pactuada</th><th class="w-1/3">Ação</th><th class="w-1/6">Responsável</th><th class="w-1/6">Registro</th></tr></thead>
+                        <tbody><tr><td class="font-bold text-slate-700">${school}</td><td>Avaliar resultados das ações do 2º semestre de 2025-GTIM</td><td>Reunião Intersetorial</td><td>Ficha de Atividade Coletiva</td></tr></tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+    </script>
+</body>
+</html>
