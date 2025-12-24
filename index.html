@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Monitor APS - Gestão Regional</title>
+    
+    <!-- Tailwind CSS & Chart.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        
+        .action-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .action-card:active { transform: scale(0.95); }
+
+        .nav-tab-active {
+            border-bottom: 3px solid #3b82f6;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+
+        #modal-overlay { transition: opacity 0.3s ease; }
+        #modal-container { transition: transform 0.3s ease, opacity 0.3s ease; }
+
+        .poeps-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        .poeps-table th, .poeps-table td { border: 1px solid #e2e8f0; padding: 12px 10px; text-align: left; vertical-align: top; }
+        .poeps-table th { background: #f8fafc; font-weight: 800; text-transform: uppercase; color: #475569; font-size: 0.65rem; letter-spacing: 0.025em; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        @media (max-width: 640px) {
+            .chart-container { height: 250px; }
+        }
+
+        .badge-meta { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 800; }
+        .badge-meta-done { background-color: #dcfce7; color: #166534; }
+        
+        .indicator-mini-card { transition: all 0.2s ease; border: 1px solid #e2e8f0; }
+        .indicator-mini-card:hover { border-color: #3b82f6; background-color: #f0f7ff; transform: translateY(-2px); }
+        .indicator-mini-card.active { border-color: #3b82f6; background-color: #eff6ff; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+
+        .authorship-card {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1000;
+            background-color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 1rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            pointer-events: none;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @media (max-width: 640px) {
+            .authorship-card {
+                bottom: 1rem;
+                right: 1rem;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- CARD DE AUTORIA FIXO -->
+    <div class="authorship-card">
+        <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Autoria:</span>
+        <span class="text-xs font-black text-slate-800">Júlia Ribeiro</span>
+    </div>
+
+    <!-- SETUP FLOW (Login) -->
+    <div id="setup-flow" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-[500] px-4">
+        <div class="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md text-center">
+            <div class="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-6">M</div>
+            <h1 class="text-2xl font-extrabold text-slate-800 mb-2">Monitor APS</h1>
+            <p class="text-slate-500 mb-8 text-sm">Painel Integrado de Gestão</p>
+            
+            <div class="space-y-4">
+                <select id="setup-muni" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition text-sm font-semibold text-slate-700">
+                    <option value="cachoeira_de_minas">Cachoeira de Minas - MG</option>
+                    <option value="camanducaia" selected>Camanducaia - MG</option>
+                    <option value="corrego_bom_jesus">Córrego do Bom Jesus - MG</option>
+                    <option value="delfim_moreira">Delfim Moreira - MG</option>
+                    <option value="itapeva">Itapeva - MG</option>
+                    <option value="pedralva">Pedralva - MG</option>
+                </select>
+                <input type="password" id="setup-pass" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition text-sm" placeholder="Senha de acesso">
+                <button onclick="handleLogin()" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition shadow-lg shadow-blue-200">Acessar Painel</button>
+                <p id="login-error" class="text-red-500 text-sm font-semibold hidden mt-2">Senha incorreta para este município.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP STRUCTURE -->
+    <div id="app-container" class="hidden flex flex-col h-full">
+        <header class="bg-white border-b border-slate-200 flex flex-col shrink-0 z-50">
+            <div class="px-4 sm:px-8 flex items-center justify-between h-16">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
+                    <span class="font-extrabold text-lg tracking-tight text-slate-900">Monitor APS</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="display-muni-name" class="hidden sm:block text-xs font-bold text-slate-500 uppercase tracking-widest">--</span>
+                    <button onclick="location.reload()" class="p-2 bg-slate-100 rounded-full text-slate-400 hover:text-red-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-width="2"></path></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <nav class="flex px-2 sm:px-6 overflow-x-auto no-scrollbar border-t border-slate-50">
+                <button onclick="setTeamType('esf_eap')" id="tab-esf" class="px-4 py-3 nav-tab-active shrink-0 flex items-center gap-2 text-xs transition-all">
+                    <span>🩺</span> eSF / eAP
+                </button>
+                <button onclick="setTeamType('esb')" id="tab-esb" class="px-4 py-3 text-slate-500 shrink-0 flex items-center gap-2 text-xs font-semibold transition-all">
+                    <span>🦷</span> Saúde Bucal
+                </button>
+                <button onclick="setTeamType('emulti')" id="tab-emulti" class="px-4 py-3 text-slate-500 shrink-0 flex items-center gap-2 text-xs font-semibold transition-all">
+                    <span>👥</span> eMulti
+                </button>
+            </nav>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
+            <aside id="sidebar" class="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col overflow-hidden shrink-0">
+                <div class="p-4 border-b border-slate-100 bg-slate-50/50 hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Unidades / Equipes
+                </div>
+                <div id="team-list" class="flex md:flex-col overflow-x-auto md:overflow-y-auto p-2 md:p-4 gap-1 no-scrollbar"></div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-50/50">
+                <div class="max-w-6xl mx-auto space-y-6 sm:space-y-10">
+                    <div class="pb-4 border-b border-slate-200">
+                        <p class="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Painel de Ações</p>
+                        <h2 id="main-title" class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">--</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" id="actions-grid"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center opacity-0 pointer-events-none p-0 sm:p-6 lg:p-10">
+        <div id="modal-container" class="bg-white w-full h-full sm:rounded-[2rem] lg:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden scale-95 opacity-0">
+            <div class="px-6 py-4 sm:px-10 sm:py-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <div class="pr-4">
+                    <h3 id="modal-title" class="text-lg sm:text-2xl font-black text-slate-800 uppercase tracking-tight truncate">--</h3>
+                    <p id="modal-subtitle" class="text-xs text-slate-400 font-medium truncate">--</p>
+                </div>
+                <button onclick="closeModal()" class="min-w-[40px] h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 active:bg-red-100 active:text-red-500">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke-width="2.5"></path></svg>
+                </button>
+            </div>
+            <div id="modal-body" class="flex-1 overflow-y-auto p-4 sm:p-10 bg-slate-50/30"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURAÇÃO DE MUNICÍPIOS ---
+        const MUNI_CONFIG = {
+            "cachoeira_de_minas": { name: "Cachoeira de Minas", pass: "012025" },
+            "camanducaia": { name: "Camanducaia", pass: "022025" },
+            "corrego_bom_jesus": { name: "Córrego do Bom Jesus", pass: "032025" },
+            "delfim_moreira": { name: "Delfim Moreira", pass: "042025" },
+            "itapeva": { name: "Itapeva", pass: "052025" },
+            "pedralva": { name: "Pedralva", pass: "062025" }
+        };
+
+        // --- DADOS DAS EQUIPES ---
+        const ALL_TEAMS_DATA = {
+            // CAMANDUCAIA - Restauração completa
+            "cam_esf_centro": { muni: "camanducaia", type: "esf_eap", name: "eSF Centro", indicators: { "C1": {num: 586, den: 2817}, "C2": {num: 120, den: 6}, "C3": {num: 138, den: 3}, "C4": {num: 11525, den: 164}, "C5": {num: 26525, den: 355}, "C6": {num: 32025, den: 543}, "C7": {prev: {num: 162, den: 704}, vax: {num: 25, den: 77}, cons: {num: 93, den: 923}, mamo: {num: 42, den: 328}} }, vinculo: { cadTotal: 2267, cadComplete: 2154, cadIncomplete: 113, cadIndOnly: 68, param: 2500, acompTotal: 2082 } },
+            "cam_esf_cruzeiro": { muni: "camanducaia", type: "esf_eap", name: "eSF Cruzeiro", indicators: { "C1": {num: 662, den: 2678}, "C2": {num: 300, den: 11}, "C3": {num: 195, den: 4}, "C4": {num: 16140, den: 204}, "C5": {num: 38875, den: 459}, "C6": {num: 41575, den: 641}, "C7": {prev: {num: 282, den: 815}, vax: {num: 69, den: 120}, cons: {num: 145, den: 1107}, mamo: {num: 56, den: 345}} }, vinculo: { cadTotal: 3026, cadComplete: 2935, cadIncomplete: 91, cadIndOnly: 91, param: 2500, acompTotal: 2896 } },
+            "cam_esf_loteamento": { muni: "camanducaia", type: "esf_eap", name: "eSF Loteamento", indicators: { "C1": {num: 944, den: 2678}, "C2": {num: 80, den: 7}, "C3": {num: 534, den: 8}, "C4": {num: 21590, den: 297}, "C5": {num: 43925, den: 616}, "C6": {num: 36875, den: 614}, "C7": {prev: {num: 375, den: 996}, vax: {num: 114, den: 133}, cons: {num: 270, den: 1325}, mamo: {num: 122, den: 413}} }, vinculo: { cadTotal: 3466, cadComplete: 3466, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 2756 } },
+            "cam_esf_monte_verde": { muni: "camanducaia", type: "esf_eap", name: "eSF Monte Verde", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cam_esf_ponte_nova": { muni: "camanducaia", type: "esf_eap", name: "eSF Ponte Nova", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cam_esf_quedas_verdes": { muni: "camanducaia", type: "esf_eap", name: "eSF Quedas Verdes", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cam_esf_sao_mateus": { muni: "camanducaia", type: "esf_eap", name: "eSF São Mateus", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cam_esb_cruzeiro": { muni: "camanducaia", type: "esb", name: "eSB Cruzeiro", indicators: generateMockIndicators("esb") },
+            "cam_esb_monte_verde": { muni: "camanducaia", type: "esb", name: "eSB Monte Verde", indicators: generateMockIndicators("esb") },
+            "cam_emulti_01": { muni: "camanducaia", type: "emulti", name: "eMulti 01", indicators: generateMockIndicators("emulti") },
+            "cam_emulti_02": { muni: "camanducaia", type: "emulti", name: "eMulti 02", indicators: generateMockIndicators("emulti") },
+            "cam_emulti_03": { muni: "camanducaia", type: "emulti", name: "eMulti 03", indicators: generateMockIndicators("emulti") },
+
+            // CACHOEIRA DE MINAS
+            "cm_esf_1": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira I", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cm_esf_2": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira II", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cm_esf_3": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira III", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cm_esf_4": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira IV", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cm_esf_5": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira V", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cm_esf_itaim": { muni: "cachoeira_de_minas", type: "esf_eap", name: "PSF do Itaim", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cm_esb_1": { muni: "cachoeira_de_minas", type: "esb", name: "eSB Cachoeira de Minas", indicators: generateMockIndicators("esb") },
+            "cm_esb_itaim": { muni: "cachoeira_de_minas", type: "esb", name: "eSB do Itaim", indicators: generateMockIndicators("esb") },
+            "cm_emulti": { muni: "cachoeira_de_minas", type: "emulti", name: "NASF Cachoeira de Minas", indicators: generateMockIndicators("emulti") },
+
+            // CÓRREGO DO BOM JESUS
+            "cbj_esf_1": { muni: "corrego_bom_jesus", type: "esf_eap", name: "PSF Bom Jesus", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cbj_esf_2": { muni: "corrego_bom_jesus", type: "esf_eap", name: "Equipe 02 Bom Jesus", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "cbj_emulti": { muni: "corrego_bom_jesus", type: "emulti", name: "eMulti Bom Jesus", indicators: generateMockIndicators("emulti") },
+
+            // DELFIM MOREIRA
+            "dm_esf_1": { muni: "delfim_moreira", type: "esf_eap", name: "Ação e Participação", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "dm_esf_2": { muni: "delfim_moreira", type: "esf_eap", name: "eSF Veredas da Mantiqueira", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "dm_esf_3": { muni: "delfim_moreira", type: "esf_eap", name: "Mais Vida", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "dm_esf_4": { muni: "delfim_moreira", type: "esf_eap", name: "Novos Tempos", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "dm_esb_1": { muni: "delfim_moreira", type: "esb", name: "eSBUCAL 01", indicators: generateMockIndicators("esb") },
+            "dm_esb_2": { muni: "delfim_moreira", type: "esb", name: "eSBUCAL 02", indicators: generateMockIndicators("esb") },
+            "dm_emulti_1": { muni: "delfim_moreira", type: "emulti", name: "e-Multi Delfim", indicators: generateMockIndicators("emulti") },
+            "dm_emulti_2": { muni: "delfim_moreira", type: "emulti", name: "e-Multi 02 Delfim", indicators: generateMockIndicators("emulti") },
+
+            // ITAPEVA
+            "it_eap_1": { muni: "itapeva", type: "esf_eap", name: "EAP I", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "it_eap_2": { muni: "itapeva", type: "esf_eap", name: "EAP II", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "it_esf_1": { muni: "itapeva", type: "esf_eap", name: "eSF Ismael Lemes", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "it_esf_2": { muni: "itapeva", type: "esf_eap", name: "eSF Luis Alves", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "it_esf_3": { muni: "itapeva", type: "esf_eap", name: "eSF Osvaldo Biagione", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "it_esf_4": { muni: "itapeva", type: "esf_eap", name: "eSF Poliana Cesar", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "it_esb_1": { muni: "itapeva", type: "esb", name: "eSB Ismael Lemes", indicators: generateMockIndicators("esb") },
+            "it_esb_2": { muni: "itapeva", type: "esb", name: "eSB Luis Alves", indicators: generateMockIndicators("esb") },
+            "it_esb_3": { muni: "itapeva", type: "esb", name: "eSB Poliana", indicators: generateMockIndicators("esb") },
+            "it_emulti_1": { muni: "itapeva", type: "emulti", name: "eMulti Itapeva", indicators: generateMockIndicators("emulti") },
+            "it_emulti_2": { muni: "itapeva", type: "emulti", name: "eMulti 2", indicators: generateMockIndicators("emulti") },
+            "it_emulti_3": { muni: "itapeva", type: "emulti", name: "eMulti 3", indicators: generateMockIndicators("emulti") },
+
+            // PEDRALVA
+            "pd_esf_1": { muni: "pedralva", type: "esf_eap", name: "eSF I - Contendas", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "pd_esf_2": { muni: "pedralva", type: "esf_eap", name: "eSF II - Estiva", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "pd_esf_3": { muni: "pedralva", type: "esf_eap", name: "eSF III - São José", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "pd_esf_4": { muni: "pedralva", type: "esf_eap", name: "eSF IV - Centro", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "pd_esf_5": { muni: "pedralva", type: "esf_eap", name: "eSF V - Dra. Stellamaris Bert", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "pd_esf_6": { muni: "pedralva", type: "esf_eap", name: "eSF VI - Vintém", indicators: generateMockIndicators("esf_eap"), vinculo: generateMockVinculo() },
+            "pd_esb_1": { muni: "pedralva", type: "esb", name: "eSB Pedralva", indicators: generateMockIndicators("esb") },
+            "pd_esb_2": { muni: "pedralva", type: "esb", name: "eSB PSF 1", indicators: generateMockIndicators("esb") },
+            "pd_esb_3": { muni: "pedralva", type: "esb", name: "eSB São José 2", indicators: generateMockIndicators("esb") },
+            "pd_esb_4": { muni: "pedralva", type: "esb", name: "eSB PSF 4", indicators: generateMockIndicators("esb") },
+            "pd_emulti": { muni: "pedralva", type: "emulti", name: "PSF III-NASF/PEDRALVA", indicators: generateMockIndicators("emulti") }
+        };
+
+        const TECH_METADATA = {
+            "esf_eap": {
+                "C1": { title: "Mais Acesso à APS", meta: "50-70%" },
+                "C2": { title: "Desenv. Infantil", meta: ">75%" },
+                "C3": { title: "Gestação e Puerpério", meta: ">75%" },
+                "C4": { title: "Diabetes", meta: ">75%" },
+                "C5": { title: "Hipertensão", meta: ">75%" },
+                "C6": { title: "Pessoa Idosa", meta: ">75%" },
+                "C7": { title: "Prevenção Câncer", meta: ">75%" }
+            },
+            "esb": {
+                "B1": { title: "1ª Consulta", meta: "100%" },
+                "B2": { title: "Tratamento Concluído", meta: "100%" },
+                "B3": { title: "Razão de Exodontia", meta: "8%" },
+                "B4": { title: "Ações Coletivas", meta: "100%" },
+                "B5": { title: "Procedimentos Preventivos", meta: "100%" },
+                "B6": { title: "Tratamento ART", meta: "15%" }
+            },
+            "emulti": {
+                "M1": { title: "Média Atendimentos", meta: "2.0" },
+                "M2": { title: "Ações Interprofissionais", meta: "2.0%" }
+            }
+        };
+
+        const PSE_SCHOOLS = {
+            "cam_esf_centro": "CMEI Milton Salles", 
+            "cam_esf_cruzeiro": "E. Moreira Brandão", 
+            "cam_esf_loteamento": "PEM Adolfa Maria",
+            "cam_esf_monte_verde": "Escola Karlis Kempis",
+            "cam_esf_ponte_nova": "E.M. João Pedro",
+            "cam_esf_quedas_verdes": "CMEI Arco-Íris",
+            "cam_esf_sao_mateus": "E.E. Padre Anchieta"
+        };
+
+        const POEPS_EVAL_DATA_MUNICIPAL = [
+            { id: 1, meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, meta: "203", real: "203", status: true, pendente: "" },
+            { id: 4, meta: "1 Ação Obrigatória", real: "VERIFICAR", status: null, pendente: "-" },
+            { id: 5, meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "" },
+            { id: 7, meta: "Aumentar atendimentos em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, meta: "28", real: "164", status: true, pendente: "" },
+            { id: "PSE", meta: "*", real: "1", status: null, pendente: "-" }
+        ];
+
+        let currentMuniId = "camanducaia";
+        let currentTeamType = "esf_eap";
+        let currentTeamId = "cam_esf_centro";
+        let barChartInstance = null;
+
+        function generateMockIndicators(type) {
+            if (type === "esf_eap") {
+                return {
+                    "C1": {num: Math.floor(Math.random() * 500) + 300, den: 1200},
+                    "C2": {num: Math.floor(Math.random() * 80) + 20, den: 10},
+                    "C3": {num: Math.floor(Math.random() * 50) + 20, den: 5},
+                    "C4": {num: Math.floor(Math.random() * 10000), den: 150},
+                    "C5": {num: Math.floor(Math.random() * 20000), den: 300},
+                    "C6": {num: Math.floor(Math.random() * 20000), den: 400},
+                    "C7": {prev: {num: 150, den: 600}, vax: {num: 40, den: 100}, cons: {num: 80, den: 800}, mamo: {num: 30, den: 300}}
+                };
+            }
+            if (type === "esb") {
+                return {
+                    "B1": {num: Math.floor(Math.random() * 100), den: 500},
+                    "B2": {num: 80, den: 100},
+                    "B3": {num: 10, den: 150},
+                    "B4": {num: 5, den: 10},
+                    "B5": {num: 120, den: 400},
+                    "B6": {num: 2, den: 50}
+                };
+            }
+            return {
+                "M1": {num: Math.floor(Math.random() * 2000), den: 500},
+                "M2": {num: 15, den: 1000}
+            };
+        }
+
+        function generateMockVinculo() {
+            return { cadTotal: 2500, cadComplete: 2300, cadIncomplete: 200, cadIndOnly: 150, param: 2500, acompTotal: 2100 };
+        }
+
+        function handleLogin() {
+            const muniId = document.getElementById('setup-muni').value;
+            const pass = document.getElementById('setup-pass').value;
+            
+            if (MUNI_CONFIG[muniId] && pass === MUNI_CONFIG[muniId].pass) {
+                currentMuniId = muniId;
+                document.getElementById('setup-flow').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('display-muni-name').innerText = MUNI_CONFIG[muniId].name;
+                setTeamType('esf_eap');
+            } else {
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+
+        function setTeamType(type) {
+            currentTeamType = type;
+            document.querySelectorAll('nav button').forEach(b => {
+                b.classList.remove('nav-tab-active');
+                b.classList.add('text-slate-500');
+            });
+            const activeTab = document.getElementById(`tab-${type.replace('esf_eap', 'esf')}`);
+            if(activeTab) {
+                activeTab.classList.add('nav-tab-active');
+                activeTab.classList.remove('text-slate-500');
+            }
+            renderTeamList();
+            renderActionButtons();
+        }
+
+        function renderTeamList() {
+            const list = document.getElementById('team-list');
+            list.innerHTML = '';
+            const teams = Object.keys(ALL_TEAMS_DATA).filter(id => {
+                return ALL_TEAMS_DATA[id].muni === currentMuniId && ALL_TEAMS_DATA[id].type === currentTeamType;
+            });
+            teams.forEach(id => {
+                const btn = document.createElement('button');
+                btn.onclick = () => selectTeam(id);
+                btn.id = `side-${id}`;
+                btn.className = "flex-none md:flex-shrink-0 md:w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap md:whitespace-normal mb-1 border md:border-0 border-slate-100";
+                btn.innerText = ALL_TEAMS_DATA[id].name;
+                list.appendChild(btn);
+            });
+            if (teams.length > 0) {
+                selectTeam(teams[0]);
+            } else {
+                document.getElementById('main-title').innerText = "Nenhuma equipe cadastrada";
+                document.getElementById('actions-grid').innerHTML = '';
+            }
+        }
+
+        function selectTeam(id) {
+            document.querySelectorAll('#team-list button').forEach(b => {
+                b.className = "flex-none md:flex-shrink-0 md:w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap md:whitespace-normal mb-1 border md:border-0 border-slate-100 text-slate-600 bg-white";
+            });
+            const activeBtn = document.getElementById(`side-${id}`);
+            if (activeBtn) activeBtn.className = "flex-none md:flex-shrink-0 md:w-full text-left px-4 py-3 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-md mb-1 whitespace-nowrap md:whitespace-normal";
+            currentTeamId = id;
+            document.getElementById('main-title').innerText = ALL_TEAMS_DATA[id].name;
+        }
+
+        function renderActionButtons() {
+            const grid = document.getElementById('actions-grid');
+            const commonActions = [{ id: 'indicadores', icon: '📊', title: 'Indicadores de Qualidade', color: 'border-blue-200 hover:bg-blue-50' }];
+            const esfActions = [
+                { id: 'vinculo', icon: '🔗', title: 'Vínculo e Acompanhamento', color: 'border-indigo-200 hover:bg-indigo-50' },
+                { id: 'poeps-plan', icon: '🗓️', title: 'POEPS - Planejamento Mensal', color: 'border-emerald-200 hover:bg-emerald-50' },
+                { id: 'poeps-eval', icon: '📋', title: 'POEPS - Avaliação Mês Anterior', color: 'border-orange-200 hover:bg-orange-50' },
+                { id: 'pse', icon: '🏫', title: 'PSE', color: 'border-teal-200 hover:bg-teal-50' }
+            ];
+            const allActions = currentTeamType === 'esf_eap' ? [...commonActions, ...esfActions] : commonActions;
+            grid.innerHTML = allActions.map(act => `
+                <button onclick="openModal('${act.id}')" class="action-card bg-white p-6 rounded-[2rem] border ${act.color} shadow-sm flex items-center gap-4 text-left">
+                    <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-slate-50">${act.icon}</div>
+                    <span class="text-sm font-bold text-slate-700 leading-tight">${act.title}</span>
+                </button>
+            `).join('');
+        }
+
+        function calculateScore(code, teamId) {
+            const data = ALL_TEAMS_DATA[teamId].indicators[code];
+            if (!data) return 0;
+            if (code === 'C1' || code === 'M2') return (data.num / data.den) * 100;
+            if (code === 'M1') return (data.num / data.den);
+            if (code === 'C7') return ((data.prev.num / data.prev.den) * 20) + ((data.vax.num / data.vax.den) * 30) + ((data.cons.num / (data.cons.den || 1000)) * 30) + ((data.mamo.num / data.mamo.den) * 20);
+            if (['C2', 'C3', 'C4', 'C5', 'C6'].includes(code)) return (data.num / data.den);
+            return (data.num / data.den) * 100;
+        }
+
+        function getClassification(score, code) {
+            const azul = "#2563eb";
+            const verde = "#16a34a";
+            const amarelo = "#ca8a04";
+            const vermelho = "#dc2626";
+
+            if (code === 'C1') {
+                if (score > 50 && score <= 70) return { label: "Ótimo", color: "text-blue-600", hex: azul, bg: "bg-blue-50", border: "border-blue-200" };
+                if (score > 30 && score <= 50) return { label: "Bom", color: "text-green-600", hex: verde, bg: "bg-green-50", border: "border-green-200" };
+                if (score > 10 && score <= 30) return { label: "Suficiente", color: "text-yellow-600", hex: amarelo, bg: "bg-yellow-50", border: "border-yellow-200" };
+                return { label: "Regular", color: "text-red-600", hex: vermelho, bg: "bg-red-50", border: "border-red-200" };
+            }
+            if (code === 'M1') return score >= 2 ? { label: "Ótimo", color: "text-blue-600", hex: azul, bg: "bg-blue-50", border: "border-blue-200" } : { label: "Regular", color: "text-red-600", hex: vermelho, bg: "bg-red-50", border: "border-red-200" };
+            if (code === 'M2') {
+                if (score >= 2.0) return { label: "Bom", color: "text-green-600", hex: verde, bg: "bg-green-50", border: "border-green-200" };
+                if (score > 0) return { label: "Suficiente", color: "text-yellow-600", hex: amarelo, bg: "bg-yellow-50", border: "border-yellow-200" };
+                return { label: "Regular", color: "text-red-600", hex: vermelho, bg: "bg-red-50", border: "border-red-200" };
+            }
+            if (score > 75) return { label: "Ótimo", color: "text-blue-600", hex: azul, bg: "bg-blue-50", border: "border-blue-200" };
+            if (score > 50) return { label: "Bom", color: "text-green-600", hex: verde, bg: "bg-green-50", border: "border-green-200" };
+            if (score > 25) return { label: "Suficiente", color: "text-yellow-600", hex: amarelo, bg: "bg-yellow-50", border: "border-yellow-200" };
+            return { label: "Regular", color: "text-red-600", hex: vermelho, bg: "bg-red-50", border: "border-red-200" };
+        }
+
+        function openModal(module) {
+            document.getElementById('modal-overlay').classList.remove('pointer-events-none', 'opacity-0');
+            document.getElementById('modal-container').classList.remove('scale-95', 'opacity-0');
+            if (module === 'indicadores') renderIndicadores();
+            else if (module === 'vinculo') renderVinculo();
+            else if (module === 'poeps-plan') renderPoepsPlan();
+            else if (module === 'poeps-eval') renderPoepsEval();
+            else if (module === 'pse') renderPSE();
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('modal-container').classList.add('scale-95', 'opacity-0');
+            if (barChartInstance) barChartInstance.destroy();
+        }
+
+        function renderIndicadores() {
+            const team = ALL_TEAMS_DATA[currentTeamId];
+            if (!team || !team.indicators) return;
+            const codes = Object.keys(team.indicators);
+            document.getElementById('modal-title').innerText = "Indicadores de Qualidade";
+            document.getElementById('modal-subtitle').innerText = team.name;
+            document.getElementById('modal-body').innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-3xl border shadow-sm">
+                        <div class="chart-container"><canvas id="barChart"></canvas></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 h-fit">
+                        ${codes.map(c => {
+                            const score = calculateScore(c, currentTeamId);
+                            const cls = getClassification(score, c);
+                            return `
+                                <div onclick="showDetail('${c}')" id="card-${c}" class="indicator-mini-card bg-white p-3 rounded-2xl flex flex-col justify-center cursor-pointer">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase">${c}</span>
+                                    <span class="text-xl font-black ${cls.color}">${c === 'M1' ? score.toFixed(2) : score.toFixed(1) + '%'}</span>
+                                    <span class="text-[8px] font-bold uppercase ${cls.color}">${cls.label}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                <div id="detail-area" class="transition-all duration-300"></div>
+            `;
+            setTimeout(() => {
+                const scores = codes.map(c => calculateScore(c, currentTeamId));
+                const colors = codes.map(c => getClassification(calculateScore(c, currentTeamId), c).hex);
+                barChartInstance = new Chart(document.getElementById('barChart'), {
+                    type: 'bar',
+                    plugins: [ChartDataLabels],
+                    data: { labels: codes, datasets: [{ data: scores, backgroundColor: colors, borderRadius: 6 }] },
+                    options: { 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { display: false },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'top',
+                                offset: 2,
+                                formatter: (value, context) => {
+                                    const code = context.chart.data.labels[context.dataIndex];
+                                    return code === 'M1' ? value.toFixed(2) : value.toFixed(1) + '%';
+                                },
+                                font: { weight: 'bold', size: 10 },
+                                color: (context) => {
+                                    const value = context.dataset.data[context.dataIndex];
+                                    const code = context.chart.data.labels[context.dataIndex];
+                                    return getClassification(value, code).hex;
+                                }
+                            }
+                        }, 
+                        scales: { 
+                            y: { beginAtZero: true, max: 115, ticks: { stepSize: 20 } },
+                            x: { grid: { display: false } }
+                        } 
+                    }
+                });
+                showDetail(codes[0]);
+            }, 100);
+        }
+
+        function showDetail(code) {
+            const area = document.getElementById('detail-area');
+            const team = ALL_TEAMS_DATA[currentTeamId];
+            const data = team.indicators[code];
+            const metaInfo = TECH_METADATA[currentTeamType][code];
+            const score = calculateScore(code, currentTeamId);
+            const cls = getClassification(score, code);
+            document.querySelectorAll('.indicator-mini-card').forEach(c => c.classList.remove('active'));
+            const activeCard = document.getElementById(`card-${code}`);
+            if(activeCard) activeCard.classList.add('active');
+            if (code === 'C7') {
+                area.innerHTML = `
+                    <div class="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b pb-4">
+                            <h4 class="text-sm font-black text-slate-800 uppercase">${code} - ${metaInfo.title}</h4>
+                            <span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold">META: ${metaInfo.meta}</span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}">
+                                <p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Preventivo</p>
+                                <p class="text-sm font-bold text-slate-700">${data.prev.num} / ${data.prev.den}</p>
+                            </div>
+                            <div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}">
+                                <p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Vacina HPV</p>
+                                <p class="text-sm font-bold text-slate-700">${data.vax.num} / ${data.vax.den}</p>
+                            </div>
+                            <div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}">
+                                <p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Consulta</p>
+                                <p class="text-sm font-bold text-slate-700">${data.cons.num} / ${data.cons.den || 1000}</p>
+                            </div>
+                            <div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}">
+                                <p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Mamografia</p>
+                                <p class="text-sm font-bold text-slate-700">${data.mamo.num} / ${data.mamo.den}</p>
+                            </div>
+                        </div>
+                    </div>`;
+            } else {
+                area.innerHTML = `
+                    <div class="bg-white p-6 rounded-[2rem] border shadow-sm space-y-6">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-sm font-black text-slate-800 uppercase">${code} - ${metaInfo.title}</h4>
+                            <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold">META: ${metaInfo.meta}</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="flex items-center gap-4 p-4 ${cls.bg} rounded-2xl border ${cls.border}">
+                                <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-bold shadow-sm" style="color: ${cls.hex}">N</div>
+                                <div><p class="text-[9px] font-black opacity-70 uppercase" style="color: ${cls.hex}">Numerador</p><p class="text-xl font-black text-slate-800">${data.num}</p></div>
+                            </div>
+                            <div class="flex items-center gap-4 p-4 ${cls.bg} rounded-2xl border ${cls.border}">
+                                <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-bold shadow-sm" style="color: ${cls.hex}">D</div>
+                                <div><p class="text-[9px] font-black opacity-70 uppercase" style="color: ${cls.hex}">Denominador</p><p class="text-xl font-black text-slate-800">${data.den}</p></div>
+                            </div>
+                        </div>
+                        <div class="p-4 bg-white rounded-2xl flex items-center justify-between border-2" style="border-color: ${cls.hex}">
+                            <div class="flex flex-col"><span class="text-[9px] font-black uppercase tracking-widest" style="color: ${cls.hex}">Resultado do Período</span><span class="text-2xl font-black text-slate-800">${code === 'M1' ? score.toFixed(2) : score.toFixed(1) + '%'}</span></div>
+                            <div class="text-right"><span class="text-[9px] font-black text-slate-400 uppercase block">Classificação</span><span class="text-sm font-bold ${cls.color}">${cls.label}</span></div>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        function renderVinculo() {
+            const team = ALL_TEAMS_DATA[currentTeamId];
+            if (!team || !team.vinculo) return;
+            const data = team.vinculo;
+            document.getElementById('modal-title').innerText = "Vínculo e Acompanhamento";
+            document.getElementById('modal-body').innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-white p-6 rounded-3xl border shadow-sm">
+                        <h4 class="text-xs font-black text-indigo-500 uppercase tracking-widest mb-4 border-b pb-2">Dados de Cadastro</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-xs"><span>Total de Cadastros</span><span class="font-bold">${data.cadTotal}</span></div>
+                            <div class="flex justify-between text-xs text-green-600"><span>Completos e Atualizados</span><span class="font-bold">${data.cadComplete}</span></div>
+                            <div class="flex justify-between text-xs text-red-500"><span>Incompletos e/ou Desatualizados</span><span class="font-bold">${data.cadIncomplete}</span></div>
+                            <div class="flex justify-between text-xs text-yellow-600"><span>Apenas Cadastro Individual Atualizado</span><span class="font-bold">${data.cadIndOnly}</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl border shadow-sm">
+                        <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest mb-4 border-b pb-2">Acompanhamento</h4>
+                        <div class="flex justify-between text-xs"><span>Pessoas Acompanhadas</span><span class="font-bold">${data.acompTotal}</span></div>
+                        <div class="flex justify-between text-xs"><span>Parâmetro Populacional</span><span class="font-bold">${data.param}</span></div>
+                    </div>
+                </div>`;
+        }
+
+        function renderPoepsPlan() {
+            document.getElementById('modal-title').innerText = "POEPS - Planejamento Mensal";
+            document.getElementById('modal-subtitle').innerText = "Município: " + MUNI_CONFIG[currentMuniId].name;
+            document.getElementById('modal-body').innerHTML = `
+                <div class="bg-white rounded-3xl border shadow-sm overflow-hidden mb-6">
+                    <div class="p-4 bg-red-600 text-white flex items-center gap-2">
+                        <span class="text-lg">🎗️</span>
+                        <span class="text-xs font-black tracking-widest uppercase">CAMPANHA DO MÊS: Dezembro Vermelho - HIV/Aids</span>
+                    </div>
+                    <div class="overflow-x-auto no-scrollbar">
+                        <table class="poeps-table min-w-[1000px]">
+                            <thead><tr><th>IND</th><th>INDICADOR</th><th>META NO MÊS</th><th>AÇÃO PROGRAMADA</th><th>RESPONSÁVEL</th></tr></thead>
+                            <tbody class="text-slate-600">
+                                <tr><td class="font-black text-center">1</td><td>Atividade Física</td><td class="font-bold">4% Pop SUS dep.</td><td>Atividade Física Coletiva</td><td>Educador Físico</td></tr>
+                                <tr><td class="font-black text-center">2</td><td>Educação em Saúde</td><td class="font-bold">2 por equipe</td><td>Temas: Saúde Sexual</td><td>Equipe</td></tr>
+                                <tr><td class="font-black text-center">3</td><td>Marcadores Alimentares</td><td>3% Pop Geral</td><td>Avaliação em Consultas</td><td>Enfermagem</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+
+        function renderPoepsEval() {
+            document.getElementById('modal-title').innerText = "POEPS - Avaliação Mês Anterior";
+            document.getElementById('modal-subtitle').innerText = "Município: " + MUNI_CONFIG[currentMuniId].name;
+            document.getElementById('modal-body').innerHTML = `
+                <div class="bg-white rounded-3xl border shadow-sm overflow-hidden mb-6">
+                    <div class="p-4 bg-orange-600 text-white flex items-center gap-2">
+                        <span class="text-lg">📊</span><span class="text-xs font-black tracking-widest uppercase">Resultados de Novembro</span>
+                    </div>
+                    <div class="overflow-x-auto no-scrollbar">
+                        <table class="poeps-table min-w-[900px]">
+                            <thead><tr><th>INDICADOR</th><th>META</th><th>REALIZADO</th><th>CUMPRIU?</th><th>PENDENTE</th></tr></thead>
+                            <tbody class="text-slate-600">
+                                ${POEPS_EVAL_DATA_MUNICIPAL.map(d => `
+                                    <tr>
+                                        <td class="font-black text-center">${d.id}</td>
+                                        <td class="font-bold">${d.meta}</td>
+                                        <td>${d.real}</td>
+                                        <td class="text-center font-black ${d.status ? 'text-green-600' : 'text-red-600'}">${d.status === null ? '--' : (d.status ? 'SIM' : 'NÃO')}</td>
+                                        <td class="font-bold text-red-600">${d.pendente}</td>
+                                    </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+
+        function renderPSE() {
+            const team = ALL_TEAMS_DATA[currentTeamId];
+            const school = PSE_SCHOOLS[currentTeamId] || "Escola Pactuada Regional";
+            
+            // Lógica para definir os responsáveis baseada na escola (usando dados de acoes_pse.md)
+            let responsavel = "Gestores e Equipes Locais (Saúde e Educação)";
+            let registro = "Ficha de Atividade Coletiva, Atas e Fotos";
+
+            if (school.includes("Milton Salles")) {
+                responsavel = "Gestores (Saúde e Educação) e Equipes Locais";
+                registro = "Ficha de Atividade Coletiva, Ata da Reunião Intersetorial";
+            } else if (school.includes("João Pedro")) {
+                responsavel = "Enfermeiro(a) e Agente Comunitário de Saúde (ACS)";
+                registro = "Ficha Individual de Avaliação, Planilha de Nutrição";
+            } else if (school.includes("Padre Anchieta")) {
+                responsavel = "Médico(a) e Assistente Social";
+                registro = "Termo de Consentimento, Relatório Fotográfico";
+            }
+
+            document.getElementById('modal-title').innerText = "Programa Saúde na Escola";
+            document.getElementById('modal-body').innerHTML = `
+                <div class="bg-white p-6 rounded-3xl border shadow-sm space-y-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center text-xl">🏫</div>
+                        <div>
+                            <h4 class="text-sm font-bold text-slate-800">${school}</h4>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Unidade Educacional Pactuada</p>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 bg-teal-50/50 rounded-2xl border border-teal-100">
+                        <p class="text-[10px] font-black text-teal-600 uppercase mb-1">Ação Planejada</p>
+                        <p class="text-xs font-bold text-slate-700">Avaliação de resultados das ações do 2º semestre de 2025 - GTIM</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p class="text-[10px] font-black text-slate-400 uppercase mb-1">Responsável</p>
+                            <p class="text-xs font-bold text-slate-700 leading-relaxed">${responsavel}</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p class="text-[10px] font-black text-slate-400 uppercase mb-1">Registro</p>
+                            <p class="text-xs font-bold text-slate-700 leading-relaxed">${registro}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-2">
+                        <p class="text-[9px] text-slate-400 italic">
+                            * O registro deve ser o documento comprobatório da realização da ação para fins de monitoramento quadrimestral.
+                        </p>
+                    </div>
+                </div>`;
+        }
+
+        window.onload = function() {
+            document.getElementById('setup-pass').focus();
+        };
+        document.getElementById('setup-pass').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') handleLogin();
+        });
+    </script>
+</body>
+</html>
