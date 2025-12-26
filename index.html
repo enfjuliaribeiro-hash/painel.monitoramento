@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Monitor APS - Gestão Regional</title>
+    
+    <!-- Tailwind CSS & Chart.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        
+        .action-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .action-card:active { transform: scale(0.95); }
+
+        .nav-tab-active {
+            border-bottom: 3px solid #3b82f6;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+
+        #modal-overlay { transition: opacity 0.3s ease; }
+        #modal-container { transition: transform 0.3s ease, opacity 0.3s ease; }
+
+        .poeps-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+        .poeps-table th, .poeps-table td { border: 1px solid #e2e8f0; padding: 12px 10px; text-align: left; vertical-align: top; }
+        .poeps-table th { background: #f8fafc; font-weight: 800; text-transform: uppercase; color: #475569; font-size: 0.65rem; letter-spacing: 0.025em; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        @media (max-width: 640px) {
+            .chart-container { height: 250px; }
+        }
+
+        .badge-meta { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 800; }
+        .badge-meta-done { background-color: #dcfce7; color: #166534; }
+        .badge-meta-alert { background-color: #fee2e2; color: #991b1b; }
+        
+        .indicator-mini-card { transition: all 0.2s ease; border: 1px solid #e2e8f0; }
+        .indicator-mini-card:hover { border-color: #3b82f6; background-color: #f0f7ff; transform: translateY(-2px); }
+        .indicator-mini-card.active { border-color: #3b82f6; background-color: #eff6ff; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+
+        .authorship-card {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1000;
+            background-color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 1rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            pointer-events: none;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @media (max-width: 640px) {
+            .authorship-card {
+                bottom: 1rem;
+                right: 1rem;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- CARD DE AUTORIA FIXO -->
+    <div class="authorship-card">
+        <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Autoria:</span>
+        <span class="text-xs font-black text-slate-800">Júlia Ribeiro</span>
+    </div>
+
+    <!-- SETUP FLOW (Login) -->
+    <div id="setup-flow" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-[500] px-4">
+        <div class="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md text-center">
+            <div class="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-6">M</div>
+            <h1 class="text-2xl font-extrabold text-slate-800 mb-2">Monitor APS</h1>
+            <p class="text-slate-500 mb-8 text-sm">Painel Integrado de Gestão</p>
+            
+            <div class="space-y-4">
+                <select id="setup-muni" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition text-sm font-semibold text-slate-700">
+                    <option value="camanducaia" selected>Camanducaia - MG</option>
+                    <option value="itapeva">Itapeva - MG</option>
+                    <option value="cachoeira_de_minas">Cachoeira de Minas - MG</option>
+                    <option value="corrego_bom_jesus">Córrego do Bom Jesus - MG</option>
+                    <option value="delfim_moreira">Delfim Moreira - MG</option>
+                    <option value="pedralva">Pedralva - MG</option>
+                </select>
+                <input type="password" id="setup-pass" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition text-sm" placeholder="Senha de acesso">
+                <button onclick="handleLogin()" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition shadow-lg shadow-blue-200">Acessar Painel</button>
+                <p id="login-error" class="text-red-500 text-sm font-semibold hidden mt-2">Senha incorreta para este município.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP STRUCTURE -->
+    <div id="app-container" class="hidden flex flex-col h-full">
+        <header class="bg-white border-b border-slate-200 flex flex-col shrink-0 z-50">
+            <div class="px-4 sm:px-8 flex items-center justify-between h-16">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
+                    <span class="font-extrabold text-lg tracking-tight text-slate-900">Monitor APS</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="display-muni-name" class="hidden sm:block text-xs font-bold text-slate-500 uppercase tracking-widest">--</span>
+                    <button onclick="location.reload()" class="p-2 bg-slate-100 rounded-full text-slate-400 hover:text-red-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-width="2"></path></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <nav class="flex px-2 sm:px-6 overflow-x-auto no-scrollbar border-t border-slate-50">
+                <button onclick="setTeamType('esf_eap')" id="tab-esf" class="px-4 py-3 nav-tab-active shrink-0 flex items-center gap-2 text-xs transition-all">
+                    <span>🩺</span> eSF / eAP
+                </button>
+                <button onclick="setTeamType('esb')" id="tab-esb" class="px-4 py-3 text-slate-500 shrink-0 flex items-center gap-2 text-xs font-semibold transition-all">
+                    <span>🦷</span> Saúde Bucal
+                </button>
+                <button onclick="setTeamType('emulti')" id="tab-emulti" class="px-4 py-3 text-slate-500 shrink-0 flex items-center gap-2 text-xs font-semibold transition-all">
+                    <span>👥</span> eMulti
+                </button>
+            </nav>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
+            <aside id="sidebar" class="w-full md:w-72 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col overflow-hidden shrink-0">
+                <div class="p-4 border-b border-slate-100 bg-slate-50/50 hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Unidades / Equipes
+                </div>
+                <div id="team-list" class="flex md:flex-col overflow-x-auto md:overflow-y-auto p-2 md:p-4 gap-1 no-scrollbar"></div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-50/50">
+                <div class="max-w-6xl mx-auto space-y-6 sm:space-y-10">
+                    <div class="pb-4 border-b border-slate-200">
+                        <p class="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Painel de Ações</p>
+                        <h2 id="main-title" class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">--</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" id="actions-grid"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[600] flex items-center justify-center opacity-0 pointer-events-none p-0 sm:p-6 lg:p-10">
+        <div id="modal-container" class="bg-white w-full h-full sm:rounded-[2rem] lg:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden scale-95 opacity-0">
+            <div class="px-6 py-4 sm:px-10 sm:py-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <div class="pr-4">
+                    <h3 id="modal-title" class="text-lg sm:text-2xl font-black text-slate-800 uppercase tracking-tight truncate">--</h3>
+                    <p id="modal-subtitle" class="text-xs text-slate-400 font-medium truncate">--</p>
+                </div>
+                <button onclick="closeModal()" class="min-w-[40px] h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 active:bg-red-100 active:text-red-500">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke-width="2.5"></path></svg>
+                </button>
+            </div>
+            <div id="modal-body" class="flex-1 overflow-y-auto p-4 sm:p-10 bg-slate-50/30"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURAÇÃO DE MUNICÍPIOS ---
+        const MUNI_CONFIG = {
+            "cachoeira_de_minas": { name: "Cachoeira de Minas", pass: "012025" },
+            "camanducaia": { name: "Camanducaia", pass: "022025" },
+            "corrego_bom_jesus": { name: "Córrego do Bom Jesus", pass: "032025" },
+            "delfim_moreira": { name: "Delfim Moreira", pass: "042025" },
+            "itapeva": { name: "Itapeva", pass: "052025" },
+            "pedralva": { name: "Pedralva", pass: "062025" }
+        };
+
+        const TECH_METADATA = {
+            "esf_eap": {
+                "C1": { title: "Mais Acesso à APS", meta: "50-70%" },
+                "C2": { title: "Desenvolvimento Infantil", meta: ">75%" },
+                "C3": { title: "Gestação e Puerpério", meta: ">75%" },
+                "C4": { title: "Cuidado da Pessoa com Diabetes", meta: ">75%" },
+                "C5": { title: "Cuidado da Pessoa com Hipertensão", meta: ">75%" },
+                "C6": { title: "Cuidado da Pessoa Idosa", meta: ">75%" },
+                "C7": { title: "Cuidado da Mulher na Prevenção do Câncer", meta: ">75%" }
+            },
+            "esb": {
+                "B1": { title: "1ª Consulta Programada", meta: ">5%" },
+                "B2": { title: "Tratamento Concluído", meta: "75-100%" },
+                "B3": { title: "Taxa de Exodontia", meta: "8-10%" },
+                "B4": { title: "Escovação Dental", meta: ">1%" },
+                "B5": { title: "Procedimentos Preventivos", meta: "80-85%" },
+                "B6": { title: "ART", meta: ">8%" }
+            },
+            "emulti": {
+                "M1": { title: "Média de Atendimentos", meta: ">3.0" },
+                "M2": { title: "Ações Interprofissionais", meta: ">5.0%" }
+            }
+        };
+
+        // --- DADOS PSE ---
+        const PSE_SCHOOLS_CAM = {
+            "cam_esf_centro": ["Centro Municipal de Educação Infantil Milton Salles"],
+            "cam_esf_cruzeiro": ["Escola Moreira Brandão", "CEMEI Luiz Chiaradia"],
+            "cam_esf_loteamento": ["PEM Adolfa Maria Orka Plogger"],
+            "cam_esf_monte_verde": ["Escola Karlis Kempis e Verner"],
+            "cam_esf_ponte_nova": ["Escola Araucária", "Prudente de Moraes"],
+            "cam_esf_quedas_verdes": ["Rui Marzagão de Carvalho"],
+            "cam_esf_sao_mateus": ["EM Francisco Leite Melo"]
+        };
+
+        const PSE_SCHOOLS_ITAPEVA = {
+            "it_esf_1": ["Escola Pactuada EAP I"],
+            "it_esf_2": ["Escola Pactuada EAP II"],
+            "it_esf_3": ["Escola Pactuada Ismael Lemes"],
+            "it_esf_4": ["Escola Pactuada Luis Alves"],
+            "it_esf_5": ["Escola Pactuada Osvaldo Biagione"],
+            "it_esf_6": ["Escola Pactuada Poliana Cesar"]
+        };
+
+        const PSE_SCHOOLS_CM = {
+            "cm_esf_1": ["APAE ESC JOSE RODRIGUES TENORIO"],
+            "cm_esf_2": ["EE SENADOR BUENO DE PAIVA"],
+            "cm_esf_3": ["EM CAPITAO MANOEL MACHADO HOMEM"],
+            "cm_esf_4": ["CRECHE MUNICIPAL PROFESSORA EDILEIA MONTEIRO COSTA BETSA", "EM ANARDINA FRANCISCA DA COSTA"],
+            "cm_esf_5": ["PEM PROFESSORA RACHEL RIBEIRO REZENDE", "EE CONEGO JOSE EUGENIO DE FARIA"],
+            "cm_esf_itaim": ["EM PROFESSORA RITA DE CASSIA CAMPOS SILVA", "EE PROFESSOR FURTADO DE MENDONCA"]
+        };
+
+        const PSE_SCHOOLS_CBJ = {
+            "cbj_esf_1": ["E.M Monsenhor Afonso Ligório Rosa", "E.E Professor Maximiano Lambert"],
+            "cbj_esf_2": ["Centro Educacional Raio de Luz"]
+        };
+
+        const PSE_SCHOOLS_DM = {
+            "dm_esf_1": ["Joaquim Peres"],
+            "dm_esf_2": ["Não tem escola de referência. Auxilia Mais Vida nas Escolas: Filomena Peixoto, Vicentina Gomes e CMEI Vera Giffoni"],
+            "dm_esf_3": ["Filomena Peixoto", "Vicentina Gomes", "CMEI Vera Giffoni", "Marques do Sapucai", "Centro educacional Limassis"],
+            "dm_esf_4": ["EM José Carlos Ribeiro Fortes", "Escola Estadual Luiz Francisco Ribeiro"]
+        };
+
+        const PSE_SCHOOLS_PEDRALVA = {
+            "ped_esf_1": ["Escola Pactuada eSF I"],
+            "ped_esf_2": ["Escola Pactuada eSF II"],
+            "ped_esf_3": ["Escola Pactuada eSF III"],
+            "ped_esf_4": ["Escola Pactuada eSF IV"],
+            "ped_esf_5": ["Escola Pactuada eSF V"],
+            "ped_esf_6": ["Escola Pactuada eSF VI"]
+        };
+
+        const POEPS_PLAN_DATA_CAM = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", qtd: "979 participantes totais no mês", acao: "Atividade Física", resp: "Educador Físico", meta: "Atingir 4% da população SUS dependente", reg: "Ficha de Atividade Coletiva" },
+            { id: 2, ind: "Educação em Saúde", qtd: "01 Ação p/ Equipe", acao: "Prevenção da violência e cultura de Paz", resp: "Toda a Equipe", meta: "5x o número de equipes", reg: "Ficha de Atividade Coletiva" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", qtd: "20 Registros p/ Equipe", acao: "Avaliar durante atendimentos/visitas", resp: "TODOS os Profissionais da APS", meta: "Atingir 2% da população geral", reg: "Ficha de Marcadores de Consumo Alimentar" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", qtd: "01 AÇÃO OBRIGATÓRIA", acao: "Reunião do Comitê", resp: "COMITÊ", meta: "1 Ação Obrigatória e 1 Essencial", reg: "Ficha de Atividade Coletiva + Documentos Comprobatórios" },
+            { id: 5, ind: "Avaliação Antropométrica", qtd: "Realizar 112 mensurações por equipe", acao: "Aferir Peso e Altura nos atendimentos", resp: "TODOS os Profissionais da APS", meta: "Atingir 12% da população geral", reg: "Prontuário do Paciente" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", qtd: "Realizar o máximo de atualizações", acao: "Atualizar Cadastros Individuais", resp: "TODOS (Monitorar) / ACS (Atualizar)", meta: "Aumentar em 3,5%", reg: "Cadastro Individual" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", qtd: "5% dos atendimentos totais do mês", acao: "Aumentar acesso e atualizar cadastros", resp: "Nível Superior e ACS", meta: "Aumentar atendimentos em 5%", reg: "Atendimento no Prontuário" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", qtd: "28 Procedimentos totais no mês", acao: "Realizar procedimentos de PICS", resp: "Profissionais Capacitados", meta: "110 procedimentos/quadrimestre", reg: "Evolução no Prontuário" },
+        ];
+
+        const POEPS_PLAN_DATA_ITAPEVA = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", qtd: "553 participantes totais no mês", acao: "Atividade Física", resp: "Educador Físico", meta: "Atingir 6% da população SUS dependente", reg: "Ficha de Atividade Coletiva" },
+            { id: 2, ind: "Educação em Saúde", qtd: "01 Ação p/ Equipe", acao: "Prevenção da violência e cultura de Paz", resp: "Toda a Equipe", meta: "5x o número de equipes", reg: "Ficha de Atividade Coletiva" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", qtd: "12 Registros p/ Equipe", acao: "Avaliar durante atendimentos", resp: "TODOS os Profissionais da APS", meta: "Atingir 2% da população geral", reg: "Ficha de Marcadores de Consumo Alimentar" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", qtd: "01 AÇÃO OBRIGATÓRIA", acao: "Reunião do Comitê", resp: "COMITÊ", meta: "1 Ação Obrigatória e 1 Essencial", reg: "Ficha de Atividade Coletiva + Documentos Comprobatórios" },
+            { id: 5, ind: "Avaliação Antropométrica", qtd: "90 mensurações por equipe", acao: "Aferir Peso e Altura nos atendimentos", resp: "TODOS os Profissionais da APS", meta: "AAtingir 17% da população geral", reg: "Prontuário do Paciente" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", qtd: "Realizar o máximo de atualizações", acao: "Atualizar Cadastros Individuais", resp: "TODOS (Monitorar) / ACS (Atualizar)", meta: "Aumentar em 3,5%", reg: "Cadastro Individual" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", qtd: "5% dos atendimentos totais do mês", acao: "Aumentar acesso e atualizar cadastros", resp: "Nível Superior e ACS", meta: "Aumentar atendimentos em 5%", reg: "Atendimento no Prontuário" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", qtd: "12 Procedimentos totais no mês", acao: "Realizar procedimentos de PICS", resp: "Profissionais Capacitados", meta: "47 procedimentos", reg: "Evolução no Prontuário" },
+        ];
+
+        const POEPS_PLAN_DATA_CACHOEIRA = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", qtd: "565 participantes totais no mês", acao: "Atividade Física", resp: "Educador Físico", meta: "Atingir 6% da população SUS dependente", reg: "Ficha de Atividade Coletiva" },
+            { id: 2, ind: "Educação em Saúde", qtd: "01 Ação p/ Equipe", acao: "Prevenção da violência e cultura de Paz", resp: "Toda a Equipe", meta: "5x o número de equipes", reg: "Ficha de Atividade Coletiva" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", qtd: "12 Registros p/ Equipe", acao: "Avaliar durante atendimentos/visitas", resp: "TODOS os Profissionais da APS", meta: "Atingir 2% da população geral", reg: "Ficha de Marcadores de Consumo Alimentar" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", qtd: "01 AÇÃO OBRIGATÓRIA", acao: "Reunião do Comitê", resp: "COMITÊ", meta: "1 Ação Obrigatória e 1 Essencial", reg: "Ficha de Atividade Coletiva + Documentos Comprobatórios" },
+            { id: 5, ind: "Avaliação Antropométrica", qtd: "90 mensurações p/ Equipe", acao: "Aferir Peso e Altura nos atendimentos", resp: "Todos os Profissionais da APS", meta: "Atingir 17% da população geral", reg: "Prontuário do Paciente" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", qtd: "Máximo de atualizações", acao: "Atualizar Cadastros Individuais", resp: "Todos (Monitorar) / ACS (Atualizar)", meta: "Aumentar em 3,5%", reg: "Cadastro Individual" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", qtd: "5% dos atendimentos totais do mês", acao: "Aumentar acesso e atualizar cadastros", resp: "Nível Superior e ACS", meta: "Aumentar atendimentos em 5%", reg: "Atendimento no Prontuário" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", qtd: "12 Procedimentos totais no mês", acao: "Realizar procedimentos de PICS", resp: "Profissionais Capacitados", meta: "47 Procedimentos", reg: "Evolução no Prontuário" },
+        ];
+
+        const POEPS_PLAN_DATA_CORREGO = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", qtd: "234 participantes totais no mês", acao: "Atividade Física", resp: "Educador Físico", meta: "Atingir 6% da população SUS dependente", reg: "Ficha de Atividade Coletiva" },
+            { id: 2, ind: "Educação em Saúde", qtd: "01 Ação p/ Equipe", acao: "Prevenção da violência e cultura de Paz", resp: "Toda a Equipe", meta: "5x o número de equipes", reg: "Ficha de Atividade Coletiva" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", qtd: "12 Registros p/ Equipe", acao: "Avaliar durante atendimentos/visitas", resp: "TODOS os Profissionais da APS", meta: "Atingir 2% da população geral", reg: "Ficha de Marcadores de Consumo Alimentar" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", qtd: "01 AÇÃO OBRIGATÓRIA", acao: "Reunião do Comitê", resp: "COMITÊ", meta: "1 Ação Obrigatória e 1 Essencial", reg: "Ficha de Atividade Coletiva + Documentos Comprobatórios" },
+            { id: 5, ind: "Avaliação Antropométrica", qtd: "92 mensurações p/ Equipe", acao: "Aferir Peso e Altura nos atendimentos", resp: "TODOS os Profissionais da APS", meta: "Atingir 17% da população geral", reg: "Prontuário do Paciente" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", qtd: "Máximo de atualizações", acao: "Atualizar Cadastros Individuais", resp: "TODOS (Monitorar) / ACS (Atualizar)", meta: "Aumentar em 3,5%", reg: "Cadastro Individual" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", qtd: "5% dos atendimentos totais do mês", acao: "Aumentar acesso e atualizar cadastros", resp: "Nível Superior e ACS", meta: "Aumentar atendimentos em 5%", reg: "Atendimento no Prontuário" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", qtd: "12 Procedimentos totais no mês", acao: "Realizar procedimentos de PICS", resp: "Profissionais Capacitados", meta: "47 Procedimentos", reg: "Evolução no Prontuário" }
+        ];
+
+        const POEPS_PLAN_DATA_DELFIM = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", qtd: "445 participantes totais no mês", acao: "Atividade Física", resp: "Educador Físico", meta: "Atingir 6% da população SUS dependente", reg: "Ficha de Atividade Coletiva" },
+            { id: 2, ind: "Educação em Saúde", qtd: "01 Ação p/ Equipe", acao: "Prevenção da violência e cultura de Paz", resp: "Toda a Equipe", meta: "5x o número de equipes", reg: "Ficha de Atividade Coletiva" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", qtd: "12 Registros p/ Equipe", acao: "Avaliar durante atendimentos/visitas", resp: "TODOS os Profissionais da APS", meta: "Atingir 2% da população geral", reg: "Ficha de Marcadores de Consumo Alimentar" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", qtd: "01 AÇÃO OBRIGATÓRIA", acao: "Reunião do Comitê", resp: "COMITÊ", meta: "1 Ação Obrigatória e 1 Essencial", reg: "Ficha de Atividade Coletiva + Documentos Comprobatórios" },
+            { id: 5, ind: "Avaliação Antropométrica", qtd: "85 mensurações p/ Equipe", acao: "Aferir Peso e Altura nos atendimentos", resp: "TODOS os Profissionais da APS", meta: "Atingir 17% da população geral", reg: "Prontuário do Paciente" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", qtd: "Máximo de atualizações", acao: "Atualizar Cadastros Individuais", resp: "TODOS (Monitorar) / ACS (Atualizar)", meta: "Aumentar em 3,5%", reg: "Ficha Cadastro Individual" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", qtd: "5% dos atendimentos totais do mês", acao: "Aumentar acesso e atualizar cadastros", resp: "Nível Superior e ACS", meta: "Aumentar atendimentos em 5%", reg: "Atendimento no Prontuário" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", qtd: "12 Procedimentos totais no mês", acao: "Realizar procedimentos de PICS", resp: "Profissionais Capacitados", meta: "47 Procedimentos", reg: "Evolução no Prontuário" }
+        ];
+
+        const POEPS_PLAN_DATA_PEDRALVA = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", qtd: "580 participantes totais no mê", acao: "Atividade Física", resp: "Educador Físico", meta: "Atingir 6% da população SUS dependente", reg: "Ficha de Atividade Coletiva" },
+            { id: 2, ind: "Educação em Saúde", qtd: "01 Ação p/ Equipe", acao: "Prevenção da violência e cultura de Paz", resp: "Toda a Equipe", meta: "5x o número de equipes", reg: "Ficha de Atividade Coletiva" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", qtd: "10 Registros p/ Equipe", acao: "Avaliar durante atendimentos/visitas", resp: "TODOS os Profissionais da APS", meta: "Atingir 2% da população geral", reg: "Ficha de Marcadores de Consumo Alimentar" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", qtd: "01 AÇÃO OBRIGATÓRIA", acao: "Reunião do Comitê", resp: "COMITÊ", meta: "1 Ação Obrigatória e 1 Essencial", reg: "Ficha de Atividade Coletiva + Documentos Comprobatórios" },
+            { id: 5, ind: "Avaliação Antropométrica", qtd: "77 mensurações p/ Equipe", acao: "Aferir Peso e Altura nos atendimentos", resp: "TODOS os Profissionais da APS", meta: "Atingir 17% da população geral", reg: "Prontuário do Paciente" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", qtd: "Máximo de atualizações", acao: "Atualizar Cadastros Individuais", resp: "TODOS (Monitorar) / ACS (Atualizar)", meta: "Aumentar em 3,5%", reg: "Cadastro Individual" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", qtd: "5% dos atendimentos totais do mês", acao: "Aumentar acesso e atualizar cadastros", resp: "Nível Superior e ACS", meta: "Aumentar atendimentos em 5%", reg: "Atendimento no Prontuário" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", qtd: "12 Procedimentos totais no mês", acao: "Realizar procedimentos de PICS", resp: "Profissionais Capacitados", meta: "47 Procedimentos", reg: "Evolução no Prontuário" }
+        ];
+
+        const POEPS_EVAL_DATA_CAM = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, ind: "Educação em Saúde", meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", meta: "203", real: "203", status: true, pendente: "-" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", meta: "1 Ação Obrigatória", real: "VERIFICAR", status: true, pendente: "-" },
+            { id: 5, ind: "Avaliação Antropométrica", meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "-" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", meta: "Aumentar em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", meta: "28", real: "164", status: true, pendente: "-" }
+        ];
+
+        const POEPS_EVAL_DATA_ITAPEVA = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, ind: "Educação em Saúde", meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", meta: "203", real: "203", status: true, pendente: "-" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", meta: "1 Ação Obrigatória", real: "VERIFICAR", status: true, pendente: "-" },
+            { id: 5, ind: "Avaliação Antropométrica", meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "-" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", meta: "Aumentar em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", meta: "28", real: "164", status: true, pendente: "-" }
+        ];
+
+        const POEPS_EVAL_DATA_CACHOEIRA = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, ind: "Educação em Saúde", meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", meta: "203", real: "203", status: true, pendente: "-" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", meta: "1 Ação Obrigatória", real: "VERIFICAR", status: true, pendente: "-" },
+            { id: 5, ind: "Avaliação Antropométrica", meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "-" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", meta: "Aumentar em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", meta: "28", real: "164", status: true, pendente: "-" }
+        ];
+
+        const POEPS_EVAL_DATA_CORREGO = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, ind: "Educação em Saúde", meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", meta: "203", real: "203", status: true, pendente: "-" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", meta: "1 Ação Obrigatória", real: "VERIFICAR", status: true, pendente: "-" },
+            { id: 5, ind: "Avaliação Antropométrica", meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "-" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", meta: "Aumentar em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", meta: "28", real: "164", status: true, pendente: "-" }
+        ];
+
+        const POEPS_EVAL_DATA_DELFIM = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, ind: "Educação em Saúde", meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", meta: "203", real: "203", status: true, pendente: "-" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", meta: "1 Ação Obrigatória", real: "VERIFICAR", status: true, pendente: "-" },
+            { id: 5, ind: "Avaliação Antropométrica", meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "-" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", meta: "Aumentar em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", meta: "28", real: "164", status: true, pendente: "-" }
+        ];
+
+        const POEPS_EVAL_DATA_PEDRALVA = [
+            { id: 1, ind: "Práticas Corporais / Atividade Física", meta: "1.357", real: "241", status: false, pendente: "1.116" },
+            { id: 2, ind: "Educação em Saúde", meta: "7", real: "0", status: false, pendente: "7" },
+            { id: 3, ind: "Marcadores de Consumo Alimentar", meta: "203", real: "203", status: true, pendente: "-" },
+            { id: 4, ind: "Comitê de Políticas de Equidades", meta: "1 Ação Obrigatória", real: "VERIFICAR", status: true, pendente: "-" },
+            { id: 5, ind: "Avaliação Antropométrica", meta: "1.770", real: "1.709", status: false, pendente: "61" },
+            { id: 6, ind: "Orientação Sexual e Identidade de Gênero", meta: "Aumentar em 1,2%", real: "Houve Aumento e Qualificação dos cadastros", status: true, pendente: "-" },
+            { id: 7, ind: "Atendimento à Pessoas Pretas e Pardas", meta: "Aumentar em 5%", real: "Não foi possível verificar", status: null, pendente: "-" },
+            { id: 8, ind: "Práticas Integrativas (PICS)", meta: "28", real: "164", status: true, pendente: "-" }
+        ];
+
+        let currentMuniId = "camanducaia";
+        let currentTeamType = "esf_eap";
+        let currentTeamId = "cam_esf_centro";
+        let barChartInstance = null;
+
+        function generateMockVinculo() { return { cadTotal: 2500, cadComplete: 2300, cadIncomplete: 200, cadIndOnly: 150, param: 2500, acompTotal: 2100 }; }
+
+        const ALL_TEAMS_DATA = {
+            // CACHOEIRA DE MINAS (Sem eSF Centro)
+            "cm_esf_1": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira I", indicators: { "C1": {num: 2074, den: 2825}, "C2": {num: 3960, den: 56}, "C3": {num: 983, den: 18}, "C4": {num: 18540, den: 227}, "C5": {num: 57175, den: 673}, "C6": {num: 50800, den: 629}, "C7": {num: 963, den: 2276} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "cm_esf_2": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira II", indicators: { "C1": {num: 1008, den: 2116}, "C2": {num: 1900, den: 32}, "C3": {num: 191, den: 4}, "C4": {num: 11080, den: 143}, "C5": {num: 47900, den: 578}, "C6": {num: 41950, den: 555}, "C7": {num: 592, den: 1246} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "cm_esf_3": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira III", indicators: { "C1": {num: 1348, den: 1892}, "C2": {num: 1560, den: 39}, "C3": {num: 327, den: 8}, "C4": {num: 9020, den: 126}, "C5": {num: 36250, den: 460}, "C6": {num: 32525, den: 439}, "C7": {num: 525, den: 1512} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "cm_esf_4": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira IV", indicators: { "C1": {num: 1030, den: 1641}, "C2": {num: 2200, den: 47}, "C3": {num: 338, den: 7}, "C4": {num: 9890, den: 147}, "C5": {num: 46525, den: 612}, "C6": {num: 33200, den: 479}, "C7": {num: 513, den: 1460} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "cm_esf_5": { muni: "cachoeira_de_minas", type: "esf_eap", name: "eSF Cachoeira V", indicators: { "C1": {num: 1287, den: 1653}, "C2": {num: 2340, den: 42}, "C3": {num: 636, den: 13}, "C4": {num: 7760, den: 107}, "C5": {num: 41100, den: 520}, "C6": {num: 29400, den: 395}, "C7": {num: 636, den: 1743} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "cm_esf_itaim": { muni: "cachoeira_de_minas", type: "esf_eap", name: "PSF do Itaim", indicators: { "C1": {num: 579, den: 1788}, "C2": {num: 1360, den: 34}, "C3": {num: 710, den: 11}, "C4": {num: 14000, den: 200}, "C5": {num: 37875, den: 484}, "C6": {num: 33675, den: 429}, "C7": {num: 699, den: 1165} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "cm_esb_1": { muni: "cachoeira_de_minas", type: "esb", name: "eSB Cachoeira de Minas", indicators: { "B1": {num: 324, den: 2842}, "B2": {num: 202, den: 324}, "B3": {num: 25, den: 312}, "B4": {num: 9, den: 320}, "B5": {num: 21, den: 561}, "B6": {num: 8, den: 84} } },
+            "cm_esb_2": { muni: "cachoeira_de_minas", type: "esb", name: "eSB Cachoeira II", indicators: { "B1": {num: 53, den: 1704}, "B2": {num: 28, den: 53}, "B3": {num: 23, den: 486}, "B4": {num: 9, den: 320}, "B5": {num: 27, den: 773}, "B6": {num: 0, den: 189} } },
+            "cm_esb_3": { muni: "cachoeira_de_minas", type: "esb", name: "eSB Cachoeira III", indicators: { "B1": {num: 96, den: 1818}, "B2": {num: 48, den: 96}, "B3": {num: 10, den: 225}, "B4": {num: 5, den: 456}, "B5": {num: 41, den: 621}, "B6": {num: 0, den: 89} } },
+            "cm_esb_4": { muni: "cachoeira_de_minas", type: "esb", name: "eSB Cachoeira IV", indicators: { "B1": {num: 159, den: 1952}, "B2": {num: 103, den: 159}, "B3": {num: 30, den: 316}, "B4": {num: 5, den: 456}, "B5": {num: 36, den: 588}, "B6": {num: 1, den: 88} } },
+            "cm_esb_5": { muni: "cachoeira_de_minas", type: "esb", name: "eSB do Itaim", indicators: { "B1": {num: 179, den: 1537}, "B2": {num: 85, den: 179}, "B3": {num: 7, den: 253}, "B4": {num: 42, den: 103}, "B5": {num: 45, den: 461}, "B6": {num: 8, den: 97} } },
+            "cm_emulti": { muni: "cachoeira_de_minas", type: "emulti", name: "NASF Cachoeira de Minas", indicators: { "M1": {num: 8676, den: 1468}, "M2": {num: 43, den: 1024} } }, 
+
+            // CÓRREGO DO BOM JESUS
+            "cbj_esf_1": { muni: "corrego_bom_jesus", type: "esf_eap", name: "PSF Bom Jesus", indicators: { "C1": {num: 931, den: 1677}, "C2": {num: 120, den: 5}, "C3": {num: 64, den: 3}, "C4": {num: 16615, den: 257}, "C5": {num: 41400, den: 624}, "C6": {num: 38300, den: 653}, "C7": { prev: {num: 271, den: 450}, vax: {num: 47, den: 57}, cons: {num: 191, den: 611}, mamo: {num: 100, den: 293} } }, vinculo: { cadTotal: 1767, cadComplete: 1149, cadIncomplete: 618, cadIndOnly: 618, param: 2500, acompTotal: 1427 } },
+            "cbj_esf_2": { muni: "corrego_bom_jesus", type: "esf_eap", name: "Equipe 2 Bom Jesus", indicators: { "C1": {num: 1133, den: 1882}, "C2": {num: 200, den: 12}, "C3": {num: 257, den: 7}, "C4": {num: 19495, den: 285}, "C5": {num: 53550, den: 702}, "C6": {num: 45825, den: 633}, "C7": { prev: {num: 492, den: 677}, vax: {num: 59, den: 66}, cons: {num: 422, den: 888}, mamo: {num: 185, den: 320} } }, vinculo: { cadTotal: 2470, cadComplete: 2445, cadIncomplete: 25, cadIndOnly: 0, param: 2500, acompTotal: 2322 } },
+            "cbj_emulti": { muni: "corrego_bom_jesus", type: "emulti", name: "eMulti Bom Jesus", indicators: { "M1": {num: 3591, den: 906}, "M2": {num: 33, den: 3060} } },
+
+            // DELFIM MOREIRA
+            "dm_esf_1": { muni: "delfim_moreira", type: "esf_eap", name: "Ação e Participação", indicators: { "C1": {num: 257, den: 930}, "C2": {num: 20, den: 1}, "C3": {num: 428, den: 7}, "C4": {num: 10300, den: 108}, "C5": {num: 29900, den: 323}, "C6": {num: 21500, den: 342}, "C7": { prev: {num: 182, den: 386}, vax: {num: 42, den: 55}, cons: {num: 64, den: 505}, mamo: {num: 42, den: 201} } }, vinculo: { cadTotal: 1045, cadComplete: 721, cadIncomplete: 324, cadIndOnly: 324, param: 2500, acompTotal: 1017 } },
+            "dm_esf_2": { muni: "delfim_moreira", type: "esf_eap", name: "ESF Veredas da Mantiqueira", indicators: { "C1": {num: 475, den: 1604}, "C2": {num: 200, den: 7}, "C3": {num: 510, den: 8}, "C4": {num: 15060, den: 193}, "C5": {num: 27900, den: 354}, "C6": {num: 18425, den: 349}, "C7": { prev: {num: 205, den: 510}, vax: {num: 65, den: 80}, cons: {num: 63, den: 674}, mamo: {num: 65, den: 230} } }, vinculo: { cadTotal: 1819, cadComplete: 1419, cadIncomplete: 400, cadIndOnly: 364, param: 2500, acompTotal: 1489 } },
+            "dm_esf_3": { muni: "delfim_moreira", type: "esf_eap", name: "Mais Vida", indicators: { "C1": {num: 904, den: 2216}, "C2": {num: 280, den: 11}, "C3": {num: 119, den: 2}, "C4": {num: 16050, den: 217}, "C5": {num: 44850, den: 518}, "C6": {num: 31925, den: 587}, "C7": { prev: {num: 196, den: 611}, vax: {num: 43, den: 65}, cons: {num: 74, den: 840}, mamo: {num: 98, den: 342} } }, vinculo: { cadTotal: 2253, cadComplete: 2208, cadIncomplete: 45, cadIndOnly: 45, param: 2500, acompTotal: 1998 } },
+            "dm_esf_4": { muni: "delfim_moreira", type: "esf_eap", name: "Novos Tempos", indicators: { "C1": {num: 609, den: 1341}, "C2": {num: 40, den: 3}, "C3": {num: 164, den: 4}, "C4": {num: 11955, den: 161}, "C5": {num: 36275, den: 437}, "C6": {num: 27225, den: 496}, "C7": { prev: {num: 177, den: 413}, vax: {num: 43, den: 57}, cons: {num: 83, den: 538}, mamo: {num: 87, den: 252} } }, vinculo: { cadTotal: 1558, cadComplete: 1527, cadIncomplete: 31, cadIndOnly: 31, param: 2500, acompTotal: 1415 } },
+            "dm_esb_1": { muni: "delfim_moreira", type: "esb", name: "eSBUCAL 01", indicators: { "B1": {num: 360, den: 6729}, "B2": {num: 201, den: 249}, "B3": {num: 66, den: 1086}, "B4": {num: 42, den: 453}, "B5": {num: 327, den: 2475}, "B6": {num: 57, den: 546} } },
+            "dm_esb_2": { muni: "delfim_moreira", type: "esb", name: "eSBUCAL 02", indicators: { "B1": {num: 141, den: 4719}, "B2": {num: 102, den: 111}, "B3": {num: 12, den: 495}, "B4": {num: 30, den: 327}, "B5": {num: 174, den: 1188}, "B6": {num: 54, den: 306} } },
+            "dm_emulti_1": { muni: "delfim_moreira", type: "emulti", name: "eMulti Delfim", indicators: { "M1": {num: 962, den: 722}, "M2": {num: 114, den: 961} } },
+            "dm_emulti_2": { muni: "delfim_moreira", type: "emulti", name: "eMulti 02 Delfim", indicators: { "M1": {num: 0, den: 0}, "M2": {num: 0, den: 0} } },
+
+            // CAMANDUCAIA
+            "cam_esf_centro": { muni: "camanducaia", type: "esf_eap", name: "eSF Centro", indicators: { "C1": {num: 586, den: 2817}, "C2": {num: 120, den: 6}, "C3": {num: 138, den: 3}, "C4": {num: 11525, den: 164}, "C5": {num: 26525, den: 355}, "C6": {num: 32025, den: 543}, "C7": {prev: {num: 162, den: 704}, vax: {num: 25, den: 77}, cons: {num: 93, den: 923}, mamo: {num: 42, den: 328}} }, vinculo: { cadTotal: 2267, cadComplete: 2154, cadIncomplete: 113, cadIndOnly: 68, param: 2500, acompTotal: 2082 } },
+            "cam_esf_cruzeiro": { muni: "camanducaia", type: "esf_eap", name: "eSF Cruzeiro", indicators: { "C1": {num: 662, den: 2678}, "C2": {num: 300, den: 11}, "C3": {num: 195, den: 4}, "C4": {num: 16140, den: 204}, "C5": {num: 38875, den: 459}, "C6": {num: 41575, den: 641}, "C7": {prev: {num: 282, den: 815}, vax: {num: 69, den: 120}, cons: {num: 145, den: 1107}, mamo: {num: 56, den: 345}} }, vinculo: { cadTotal: 3026, cadComplete: 2935, cadIncomplete: 91, cadIndOnly: 91, param: 2500, acompTotal: 2896 } },
+            "cam_esf_loteamento": { muni: "camanducaia", type: "esf_eap", name: "eSF Loteamento", indicators: { "C1": {num: 944, den: 2678}, "C2": {num: 80, den: 7}, "C3": {num: 534, den: 8}, "C4": {num: 21590, den: 297}, "C5": {num: 43925, den: 616}, "C6": {num: 36875, den: 614}, "C7": {prev: {num: 372, den: 996}, vax: {num: 114, den: 133}, cons: {num: 270, den: 1325}, mamo: {num: 122, den: 413}} }, vinculo: { cadTotal: 3466, cadComplete: 3466, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 2756 } },
+            "cam_esf_monte_verde": { muni: "camanducaia", type: "esf_eap", name: "eSF Monte Verde", indicators: { "C1": {num: 406, den: 2286}, "C2": {num: 1480, den: 21}, "C3": {num: 541, den: 13}, "C4": {num: 11385, den: 164}, "C5": {num: 26750, den: 363}, "C6": {num: 30475, den: 552}, "C7": {prev: {num: 287, den: 967}, vax: {num: 57, den: 132}, cons: {num: 47, den: 1254}, mamo: {num: 58, den: 408}} }, vinculo: { cadTotal: 3217, cadComplete: 3217, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 2876 } },
+            "cam_esf_ponte_nova": { muni: "camanducaia", type: "esf_eap", name: "eSF Ponte Nova", indicators: { "C1": {num: 532, den: 1243}, "C2": {num: 60, den: 7}, "C3": {num: 247, den: 6}, "C4": {num: 9235, den: 139}, "C5": {num: 21500, den: 347}, "C6": {num: 16925, den: 386}, "C7": {prev: {num: 142, den: 621}, vax: {num: 45, den: 109}, cons: {num: 48, den: 816}, mamo: {num: 21, den: 259}} }, vinculo: { cadTotal: 2153, cadComplete: 2131, cadIncomplete: 22, cadIndOnly: 0, param: 2500, acompTotal: 1522 } },
+            "cam_esf_quedas_verdes": { muni: "camanducaia", type: "esf_eap", name: "eSF Quedas Verdes", indicators: { "C1": {num: 377, den: 1408}, "C2": {num: 200, den: 13}, "C3": {num: 355, den: 10}, "C4": {num: 11760, den: 186}, "C5": {num: 29575, den: 422}, "C6": {num: 26925, den: 472}, "C7": {prev: {num: 238, den: 596}, vax: {num: 47, den: 101}, cons: {num: 51, den: 793}, mamo: {num: 83, den: 269}} }, vinculo: { cadTotal: 2195, cadComplete: 2129, cadIncomplete: 66, cadIndOnly: 66, param: 2500, acompTotal: 1939 } },
+            "cam_esf_sao_mateus": { muni: "camanducaia", type: "esf_eap", name: "eSF São Mateus", indicators: { "C1": {num: 475, den: 2848}, "C2": {num: 400, den: 10}, "C3": {num: 429, den: 9}, "C4": {num: 16670, den: 197}, "C5": {num: 35925, den: 455}, "C6": {num: 37125, den: 617}, "C7": {prev: {num: 168, den: 655}, vax: {num: 25, den: 77}, cons: {num: 93, den: 923}, mamo: {num: 42, den: 328}} }, vinculo: { cadTotal: 2420, cadComplete: 2347, cadIncomplete: 73, cadIndOnly: 49, param: 2500, acompTotal: 2195 } },
+            "cam_esb_cruzeiro": { muni: "camanducaia", type: "esb", name: "eSB Cruzeiro", indicators: { "B1": {num: 256, den: 6112}, "B2": {num: 148, den: 180}, "B3": {num: 114, den: 1434}, "B4": {num: 32, den: 548}, "B5": {num: 698, den: 3354}, "B6": {num: 6, den: 330} } },
+            "cam_esb_monte_verde": { muni: "camanducaia", type: "esb", name: "eSB Monte Verde", indicators: { "B1": {num: 24, den: 3190}, "B2": {num: 10, den: 12}, "B3": {num: 4, den: 80}, "B4": {num: 1, den: 292}, "B5": {num: 28, den: 146}, "B6": {num: 0, den: 17} } },
+            "cam_emulti_1": { muni: "camanducaia", type: "emulti", name: "eMulti 01", indicators: { "M1": {num: 3169, den: 890}, "M2": {num: 111, den: 2992} } },
+            "cam_emulti_2": { muni: "camanducaia", type: "emulti", name: "eMulti 02", indicators: { "M1": {num: 2608, den: 413}, "M2": {num: 6, den: 2222} } },
+            "cam_emulti_3": { muni: "camanducaia", type: "emulti", name: "eMulti 03", indicators: { "M1": {num: 808, den: 178}, "M2": {num: 8, den: 1261} } },
+
+            // ITAPEVA
+            "it_esf_1": { muni: "itapeva", type: "esf_eap", name: "EAP I", indicators: { "C1": {num: 0, den: 0}, "C2": {num: 0, den: 0}, "C3": {num: 0, den: 0}, "C4": {num: 0, den: 0}, "C5": {num: 0, den: 0}, "C6": {num: 0, den: 0}, "C7": {num: 0, den: 0} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "it_esf_2": { muni: "itapeva", type: "esf_eap", name: "EAP II", indicators: { "C1": {num: 0, den: 0}, "C2": {num: 0, den: 0}, "C3": {num: 0, den: 0}, "C4": {num: 0, den: 0}, "C5": {num: 0, den: 0}, "C6": {num: 0, den: 0}, "C7": {num: 0, den: 0} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0} },
+            "it_esf_3": { muni: "itapeva", type: "esf_eap", name: "eSF Ismael Lemes", indicators: { "C1": {num: 0, den: 0}, "C2": {num: 0, den: 0}, "C3": {num: 0, den: 0}, "C4": {num: 0, den: 0}, "C5": {num: 0, den: 0}, "C6": {num: 0, den: 0}, "C7": {num: 0, den: 0} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "it_esf_4": { muni: "itapeva", type: "esf_eap", name: "eSF Luis Alves", indicators: { "C1": {num: 0, den: 0}, "C2": {num: 0, den: 0}, "C3": {num: 0, den: 0}, "C4": {num: 0, den: 0}, "C5": {num: 0, den: 0}, "C6": {num: 0, den: 0}, "C7": {num: 0, den: 0} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "it_esf_5": { muni: "itapeva", type: "esf_eap", name: "eSF Osvaldo Biagione", indicators: { "C1": {num: 0, den: 0}, "C2": {num: 0, den: 0}, "C3": {num: 0, den: 0}, "C4": {num: 0, den: 0}, "C5": {num: 0, den: 0}, "C6": {num: 0, den: 0}, "C7": {num: 0, den: 0} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "it_esf_6": { muni: "itapeva", type: "esf_eap", name: "eSF Poliana Cesar", indicators: { "C1": {num: 0, den: 0}, "C2": {num: 0, den: 0}, "C3": {num: 0, den: 0}, "C4": {num: 0, den: 0}, "C5": {num: 0, den: 0}, "C6": {num: 0, den: 0}, "C7": {num: 0, den: 0} }, vinculo: { cadTotal: 0, cadComplete: 0, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 0 } },
+            "it_esb_1": { muni: "itapeva", type: "esb", name: "eSB Ismael Lemes", indicators: { "B1": {num: 0, den: 0}, "B2": {num: 0, den: 0}, "B3": {num: 0, den: 0}, "B4": {num: 0, den: 0}, "B5": {num: 0, den: 0}, "B6": {num: 0, den: 0} } },
+            "it_esb_2": { muni: "itapeva", type: "esb", name: "eSB Luis Alves", indicators: { "B1": {num: 0, den: 0}, "B2": {num: 0, den: 0}, "B3": {num: 0, den: 0}, "B4": {num: 0, den: 0}, "B5": {num: 0, den: 0}, "B6": {num: 0, den: 0} } },
+            "it_esb_3": { muni: "itapeva", type: "esb", name: "eSB Poliana", indicators: { "B1": {num: 0, den: 0}, "B2": {num: 0, den: 0}, "B3": {num: 0, den: 0}, "B4": {num: 0, den: 0}, "B5": {num: 0, den: 0}, "B6": {num: 0, den: 0} } },
+            "it_emulti_1": { muni: "itapeva", type: "emulti", name: "eMulti Itapeva", indicators: { "M1": {num: 0, den: 0}, "M2": {num: 0, den: 0} } },
+            "it_emulti_2": { muni: "itapeva", type: "emulti", name: "eMulti 2", indicators: { "M1": {num: 0, den: 0}, "M2": {num: 0, den: 0} } },
+            "it_emulti_3": { muni: "itapeva", type: "emulti", name: "eMulti 3", indicators: { "M1": {num: 0, den: 0}, "M2": {num: 0, den: 0} } },
+
+            // PEDRALVA
+            "ped_esf_1": { muni: "pedralva", type: "esf_eap", name: "eSF I - Contendas", indicators: { "C1": {num: 309, den: 1705}, "C2": {num: 380, den: 6}, "C3": {num: 245, den: 4}, "C4": {num: 15420, den: 204}, "C5": {num: 36875, den: 477}, "C6": {num: 25750, den: 376}, "C7": { prev: {num: 219, den: 375}, vax: {num: 50, den: 55}, cons: {num: 133, den: 493}, mamo: {num: 73, den: 196} } }, vinculo: { cadTotal: 1498, cadComplete: 1333, cadIncomplete: 165, cadIndOnly: 165, param: 2500, acompTotal: 1411 } },
+            "ped_esf_2": { muni: "pedralva", type: "esf_eap", name: "eSF II - Estiva", indicators: { "C1": {num: 260, den: 1508}, "C2": {num: 20, den: 1}, "C3": {num: 182, den: 2}, "C4": {num: 11165, den: 140}, "C5": {num: 34100, den: 399}, "C6": {num: 29675, den: 378}, "C7": { prev: {num: 269, den: 334}, vax: {num: 42, den: 54}, cons: {num: 49, den: 457}, mamo: {num: 119, den: 193} } }, vinculo: { cadTotal: 1484, cadComplete: 1484, cadIncomplete: 0, cadIndOnly: 0, param: 2500, acompTotal: 1445 } },
+            "ped_esf_3": { muni: "pedralva", type: "esf_eap", name: "eSF III - São José", indicators: { "C1": {num: 765, den: 1921}, "C2": {num: 320, den: 6}, "C3": {num: 384, den: 6}, "C4": {num: 15655, den: 213}, "C5": {num: 35425, den: 483}, "C6": {num: 24175, den: 373}, "C7": { prev: {num: 299, den: 518}, vax: {num: 43, den: 56}, cons: {num: 74, den: 671}, mamo: {num: 88, den: 245} } }, vinculo: { cadTotal: 1617, cadComplete: 1423, cadIncomplete: 194, cadIndOnly: 178, param: 2500, acompTotal: 1466 } },
+            "ped_esf_4": { muni: "pedralva", type: "esf_eap", name: "eSF IV - Centro", indicators: { "C1": {num: 516, den: 2666}, "C2": {num: 540, den: 9}, "C3": {num: 574, den: 9}, "C4": {num: 22510, den: 332}, "C5": {num: 46500, den: 736}, "C6": {num: 42275, den: 701}, "C7": { prev: {num: 447, den: 754}, vax: {num: 67, den: 78}, cons: {num: 174, den: 994}, mamo: {num: 255, den: 424} } }, vinculo: { cadTotal: 2587, cadComplete: 2147, cadIncomplete: 440, cadIndOnly: 440, param: 2500, acompTotal: 2168 } },
+            "ped_esf_5": { muni: "pedralva", type: "esf_eap", name: "eSF V - Dra Stellamaris Bert", indicators: { "C1": {num: 224, den: 1406}, "C2": {num: 340, den: 5}, "C3": {num: 419, den: 6}, "C4": {num: 12115, den: 177}, "C5": {num: 26050, den: 385}, "C6": {num: 21250, den: 335}, "C7": { prev: {num: 148, den: 332}, vax: {num: 26, den: 30}, cons: {num: 7, den: 445}, mamo: {num: 48, den: 167} } }, vinculo: { cadTotal: 1282, cadComplete: 1205, cadIncomplete: 77, cadIndOnly: 39, param: 2500, acompTotal: 1094 } },
+            "ped_esf_6": { muni: "pedralva", type: "esf_eap", name: "eSF VI - Vintém", indicators: { "C1": {num: 194, den: 1581}, "C2": {num: 220, den: 3}, "C3": {num: 345, den: 4}, "C4": {num: 14015, den: 194}, "C5": {num: 34975, den: 444}, "C6": {num: 27500, den: 378}, "C7": { prev: {num: 223, den: 418}, vax: {num: 54, den: 62}, cons: {num: 45, den: 557}, mamo: {num: 60, den: 198} } }, vinculo: { cadTotal: 1570, cadComplete: 1554, cadIncomplete: 16, cadIndOnly: 16, param: 2500, acompTotal: 1541 } },
+            "ped_esb_1": { muni: "pedralva", type: "esb", name: "eSB Pedralva", indicators: { "B1": {num: 76, den: 3572}, "B2": {num: 44, den: 46}, "B3": {num: 38, den: 432}, "B4": {num: 82, den: 292}, "B5": {num: 130, den: 782}, "B6": {num: 8, den: 76} } },
+            "ped_esb_2": { muni: "pedralva", type: "esb", name: "eSB PSF 1", indicators: { "B1": {num: 20, den: 1448}, "B2": {num: 13, den: 13}, "B3": {num: 6, den: 125}, "B4": {num: 19, den: 94}, "B5": {num: 32, den: 229}, "B6": {num: 5, den: 27} } },
+            "ped_esb_3": { muni: "pedralva", type: "esb", name: "eSB São José 2", indicators: { "B1": {num: 38, den: 1786}, "B2": {num: 22, den: 23}, "B3": {num: 19, den: 216}, "B4": {num: 41, den: 146}, "B5": {num: 65, den: 391}, "B6": {num: 4, den: 38} } },
+            "ped_esb_4": { muni: "pedralva", type: "esb", name: "eSB PSF 4", indicators: { "B1": {num: 34, den: 2611}, "B2": {num: 20, den: 20}, "B3": {num: 17, den: 142}, "B4": {num: 46, den: 177}, "B5": {num: 48, den: 353}, "B6": {num: 12, den: 40} } },
+            "ped_esb_5": { muni: "pedralva", type: "esb", name: "eSB PSF 4 A", indicators: { "B1": {num: 34, den: 2611}, "B2": {num: 20, den: 20}, "B3": {num: 17, den: 142}, "B4": {num: 46, den: 177}, "B5": {num: 48, den: 353}, "B6": {num: 12, den: 40} } },
+            "ped_emulti_1": { muni: "pedralva", type: "emulti", name: "PSF III-NASF \ PEDRALVA", indicators: { "M1": {num: 3956, den: 974}, "M2": {num: 48, den: 3704} } }
+        };
+
+        function handleLogin() {
+            const muniId = document.getElementById('setup-muni').value;
+            const pass = document.getElementById('setup-pass').value;
+            if (MUNI_CONFIG[muniId] && pass === MUNI_CONFIG[muniId].pass) {
+                currentMuniId = muniId;
+                document.getElementById('setup-flow').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('display-muni-name').innerText = MUNI_CONFIG[muniId].name;
+                setTeamType('esf_eap');
+            } else { 
+                document.getElementById('login-error').classList.remove('hidden'); 
+            }
+        }
+
+        function setTeamType(type) {
+            currentTeamType = type;
+            document.querySelectorAll('nav button').forEach(b => { 
+                b.classList.remove('nav-tab-active'); 
+                b.classList.add('text-slate-500'); 
+            });
+            const activeTab = document.getElementById(`tab-${type.replace('esf_eap', 'esf')}`);
+            if(activeTab) { 
+                activeTab.classList.add('nav-tab-active'); 
+                activeTab.classList.remove('text-slate-500'); 
+            }
+            renderTeamList();
+            renderActionButtons();
+        }
+
+        function renderTeamList() {
+            const list = document.getElementById('team-list');
+            list.innerHTML = '';
+            const teams = Object.keys(ALL_TEAMS_DATA).filter(id => ALL_TEAMS_DATA[id].muni === currentMuniId && ALL_TEAMS_DATA[id].type === currentTeamType);
+            
+            if (teams.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 p-4">Nenhuma equipe cadastrada.</p>`;
+                return;
+            }
+
+            teams.forEach(id => {
+                const btn = document.createElement('button');
+                btn.onclick = () => selectTeam(id);
+                btn.id = `side-${id}`;
+                btn.className = "flex-none md:flex-shrink-0 md:w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap md:whitespace-normal mb-1 border md:border-0 border-slate-100 text-slate-600 bg-white";
+                btn.innerText = ALL_TEAMS_DATA[id].name;
+                list.appendChild(btn);
+            });
+            
+            if (teams.length > 0) selectTeam(teams[0]);
+        }
+
+        function selectTeam(id) {
+            document.querySelectorAll('#team-list button').forEach(b => { 
+                b.className = "flex-none md:flex-shrink-0 md:w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap md:whitespace-normal mb-1 border md:border-0 border-slate-100 text-slate-600 bg-white"; 
+            });
+            const activeBtn = document.getElementById(`side-${id}`);
+            if (activeBtn) activeBtn.className = "flex-none md:flex-shrink-0 md:w-full text-left px-4 py-3 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-md mb-1 whitespace-nowrap md:whitespace-normal";
+            
+            currentTeamId = id;
+            if(ALL_TEAMS_DATA[id]) {
+                document.getElementById('main-title').innerText = ALL_TEAMS_DATA[id].name;
+            }
+        }
+
+        function renderActionButtons() {
+            if (!currentTeamId || !ALL_TEAMS_DATA[currentTeamId]) return;
+
+            const grid = document.getElementById('actions-grid');
+            const commonActions = [{ id: 'indicadores', icon: '📊', title: 'Indicadores de Qualidade', color: 'border-blue-200 hover:bg-blue-50' }];
+            const esfActions = [
+                { id: 'vinculo', icon: '🔗', title: 'Vínculo e Acompanhamento', color: 'border-indigo-200 hover:bg-indigo-50' },
+                { id: 'poeps-plan', icon: '🗓️', title: 'POEPS - Planejamento Mensal', color: 'border-emerald-200 hover:bg-emerald-50' },
+                { id: 'poeps-eval', icon: '📋', title: 'POEPS - Avaliação Mês Anterior', color: 'border-orange-200 hover:bg-orange-50' },
+                { id: 'pse', icon: '🏫', title: 'PSE', color: 'border-teal-200 hover:bg-teal-50' }
+            ];
+            
+            let allActions = [...commonActions];
+            if (currentTeamType === 'esf_eap') {
+                allActions = [...commonActions, ...esfActions];
+            }
+
+            grid.innerHTML = allActions.map(act => `
+                <button onclick="openModal('${act.id}')" class="action-card bg-white p-6 rounded-[2rem] border ${act.color} shadow-sm flex items-center gap-4 text-left">
+                    <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-slate-50">${act.icon}</div>
+                    <span class="text-sm font-bold text-slate-700 leading-tight">${act.title}</span>
+                </button>
+            `).join('');
+        }
+
+        function calculateScore(code, teamId) {
+            const data = ALL_TEAMS_DATA[teamId].indicators[code];
+            if (!data) return 0;
+            if (code === 'C1' || code.startsWith('B') || code === 'M2') return (data.num / data.den) * 100;
+            if (code === 'M1') return (data.num / data.den);
+            if (code === 'C7') {
+                if (data.num !== undefined && data.den !== undefined) return (data.num / data.den) * 100;
+                return ((data.prev.num / data.prev.den) * 20) + ((data.vax.num / data.vax.den) * 30) + ((data.cons.num / (data.cons.den || 1000)) * 30) + ((data.mamo.num / data.mamo.den) * 20);
+            }
+            return (data.num / data.den);
+        }
+
+        function getClassification(score, code) {
+            const azul = "#2563eb"; const verde = "#16a34a"; const amarelo = "#ca8a04"; const vermelho = "#dc2626";
+            if (code === 'C1') {
+                if (score > 50 && score <= 70) return { label: "Ótimo", color: "text-blue-600", hex: azul, bg: "bg-blue-50", border: "border-blue-200" };
+                if (score > 30 && score <= 50) return { label: "Bom", color: "text-green-600", hex: verde, bg: "bg-green-50", border: "border-green-200" };
+                if (score > 10 && score <= 30) return { label: "Suficiente", color: "text-yellow-600", hex: amarelo, bg: "bg-yellow-50", border: "border-yellow-200" };
+                return { label: "Regular", color: "text-red-600", hex: vermelho, bg: "bg-red-50", border: "border-red-200" };
+            }
+            if (code === 'M1' || code === 'M2' || code === 'B6') {
+                 if (score >= 5.90) return { label: "Ótimo", color: "text-blue-600", hex: azul, bg: "bg-blue-50", border: "border-blue-200" };
+                 if (score >= 4.0) return { label: "Bom", color: "text-green-600", hex: verde, bg: "bg-green-50", border: "border-green-200" };
+            }
+            if (score > 80) return { label: "Ótimo", color: "text-blue-600", hex: azul, bg: "bg-blue-50", border: "border-blue-200" };
+            if (score > 50) return { label: "Bom", color: "text-green-600", hex: verde, bg: "bg-green-50", border: "border-green-200" };
+            if (score > 20) return { label: "Suficiente", color: "text-yellow-600", hex: amarelo, bg: "bg-yellow-50", border: "border-yellow-200" };
+            return { label: "Regular", color: "text-red-600", hex: vermelho, bg: "bg-red-50", border: "border-red-200" };
+        }
+
+        function openModal(module) {
+            document.getElementById('modal-overlay').classList.remove('pointer-events-none', 'opacity-0');
+            document.getElementById('modal-container').classList.remove('scale-95', 'opacity-0');
+            if (module === 'indicadores') renderIndicadores();
+            else if (module === 'vinculo') renderVinculo();
+            else if (module === 'poeps-plan') renderPoepsPlan();
+            else if (module === 'poeps-eval') renderPoepsEval();
+            else if (module === 'pse') renderPSE();
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('modal-container').classList.add('scale-95', 'opacity-0');
+            if (barChartInstance) barChartInstance.destroy();
+        }
+
+        function renderIndicadores() {
+            const team = ALL_TEAMS_DATA[currentTeamId]; 
+            if (!team || !team.indicators) return;
+            const codes = Object.keys(team.indicators);
+            document.getElementById('modal-title').innerText = "Indicadores de Qualidade";
+            document.getElementById('modal-subtitle').innerText = team.name;
+            document.getElementById('modal-body').innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-3xl border shadow-sm"><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+                    <div class="grid grid-cols-2 gap-3 h-fit">
+                        ${codes.map(c => { 
+                            const score = calculateScore(c, currentTeamId); const cls = getClassification(score, c); 
+                            return `<div onclick="showDetail('${c}')" id="card-${c}" class="indicator-mini-card bg-white p-3 rounded-2xl flex flex-col justify-center cursor-pointer">
+                                <span class="text-[9px] font-black text-slate-400 uppercase">${c}</span>
+                                <span class="text-xl font-black ${cls.color}">${(c === 'M1' || c === 'B3' || c === 'B5') ? score.toFixed(2) : score.toFixed(1) + '%'}</span>
+                                <span class="text-[8px] font-bold uppercase ${cls.color}">${cls.label}</span>
+                            </div>`; 
+                        }).join('')}
+                    </div>
+                </div>
+                <div id="detail-area" class="transition-all duration-300"></div>`;
+            setTimeout(() => {
+                const scores = codes.map(c => calculateScore(c, currentTeamId));
+                const colors = codes.map(c => getClassification(calculateScore(c, currentTeamId), c).hex);
+                barChartInstance = new Chart(document.getElementById('barChart'), {
+                    type: 'bar', plugins: [ChartDataLabels],
+                    data: { labels: codes, datasets: [{ data: scores, backgroundColor: colors, borderRadius: 6 }] },
+                    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'top', offset: 2, formatter: (value) => value.toFixed(1) } }, scales: { y: { beginAtZero: true, max: 115 }, x: { grid: { display: false } } } }
+                });
+                showDetail(codes[0]);
+            }, 100);
+        }
+
+        function showDetail(code) {
+            const area = document.getElementById('detail-area'); const team = ALL_TEAMS_DATA[currentTeamId]; 
+            const data = team.indicators[code]; const metaInfo = TECH_METADATA[currentTeamType][code] || { title: "Indicador", meta: "-" }; 
+            const score = calculateScore(code, currentTeamId); const cls = getClassification(score, code);
+            document.querySelectorAll('.indicator-mini-card').forEach(c => c.classList.remove('active'));
+            const activeCard = document.getElementById(`card-${code}`); if(activeCard) activeCard.classList.add('active');
+            if (code === 'C7' && data.prev) { 
+                area.innerHTML = `<div class="bg-white p-6 rounded-[2rem] border shadow-sm space-y-4"><div class="flex items-center justify-between border-b pb-4"><h4 class="text-sm font-black text-slate-800 uppercase">${code} - ${metaInfo.title}</h4><span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold">META: ${metaInfo.meta}</span></div><div class="grid grid-cols-2 sm:grid-cols-4 gap-3"><div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}"><p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Preventivo</p><p class="text-sm font-bold text-slate-700">${data.prev.num} / ${data.prev.den}</p></div><div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}"><p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Vacina HPV</p><p class="text-sm font-bold text-slate-700">${data.vax.num} / ${data.vax.den}</p></div><div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}"><p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Consulta</p><p class="text-sm font-bold text-slate-700">${data.cons.num} / ${data.cons.den}</p></div><div class="p-3 ${cls.bg} rounded-2xl border ${cls.border}"><p class="text-[8px] font-black ${cls.color} opacity-70 uppercase mb-1">Mamografia</p><p class="text-sm font-bold text-slate-700">${data.mamo.num} / ${data.mamo.den}</p></div></div></div>`; 
+            } else { 
+                area.innerHTML = `<div class="bg-white p-6 rounded-[2rem] border shadow-sm space-y-6"><div class="flex items-center justify-between"><h4 class="text-sm font-black text-slate-800 uppercase">${code} - ${metaInfo.title}</h4><span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold">META: ${metaInfo.meta}</span></div><div class="p-4 bg-white rounded-2xl flex items-center justify-between border-2" style="border-color: ${cls.hex}"><div class="flex flex-col"><span class="text-[9px] font-black uppercase tracking-widest" style="color: ${cls.hex}">Resultado</span><span class="text-2xl font-black text-slate-800">${(code === 'M1' || code === 'B3' || code === 'B5') ? score.toFixed(2) : score.toFixed(1) + '%'}</span></div><div class="text-right"><div class="mb-2"><span class="text-[9px] font-black opacity-50 block">NUM / DEN</span><span class="text-xs font-bold text-slate-600">${data.num} / ${data.den}</span></div><span class="text-[9px] font-black text-slate-400 uppercase block">Classificação</span><span class="text-sm font-bold ${cls.color}">${cls.label}</span></div></div></div>`; 
+            }
+        }
+
+        function renderVinculo() {
+            const team = ALL_TEAMS_DATA[currentTeamId]; if (!team || !team.vinculo) return; const data = team.vinculo;
+            document.getElementById('modal-title').innerText = "Vínculo e Acompanhamento";
+            document.getElementById('modal-subtitle').innerText = team.name;
+            document.getElementById('modal-body').innerHTML = `
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                        <div class="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4"><div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-xl">📝</div><div><h4 class="text-sm font-black text-slate-800 uppercase tracking-tight">Cadastro Territorial</h4><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">População Adscrita</p></div></div>
+                        <div class="grid grid-cols-2 gap-4"><div class="p-4 bg-slate-50 rounded-2xl border border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Cadastros</span><span class="text-2xl font-black text-indigo-600">${data.cadTotal}</span></div><div class="p-4 bg-slate-50 rounded-2xl border border-slate-100"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Parâmetro</span><span class="text-2xl font-black text-slate-400">${data.param}</span></div></div>
+                        <div class="mt-4 space-y-3">
+                            <div class="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 transition-colors"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-400"></div><span class="text-xs font-bold text-slate-600">Cadastros Completos e Atualizados</span></div><span class="text-sm font-black text-slate-800">${data.cadComplete}</span></div>
+                            <div class="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 transition-colors"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-red-400"></div><span class="text-xs font-bold text-slate-600">Cadastros Incompletos e/ou Desatualizados</span></div><span class="text-sm font-black text-slate-800">${data.cadIncomplete}</span></div>
+                            <div class="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 transition-colors"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-orange-400"></div><span class="text-xs font-bold text-slate-600">Apenas Individual Atualizado</span></div><span class="text-sm font-black text-slate-800">${data.cadIndOnly}</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm"><div class="flex items-center gap-3 mb-4"><div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-xl">👥</div><div><h4 class="text-sm font-black text-slate-800 uppercase tracking-tight">Acompanhamento</h4><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pessoas Atendidas</p></div></div><div class="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex justify-between items-center"><span class="text-xs font-bold text-blue-800 uppercase">Total Acompanhado</span><span class="text-2xl font-black text-blue-600">${data.acompTotal}</span></div></div>
+                </div>`;
+        }
+
+        function renderPoepsPlan() {
+            let data = []; let muniName = ""; let campaign = "Janeiro Branco - Saúde Mental";
+            if (currentMuniId === 'camanducaia') { data = POEPS_PLAN_DATA_CAM; muniName = "Camanducaia - MG"; }
+            else if (currentMuniId === 'itapeva') { data = POEPS_PLAN_DATA_ITAPEVA; muniName = "Itapeva - MG"; }
+            else if (currentMuniId === 'cachoeira_de_minas') { data = POEPS_PLAN_DATA_CACHOEIRA; muniName = "Cachoeira de Minas - MG"; }
+            else if (currentMuniId === 'corrego_bom_jesus') { data = POEPS_PLAN_DATA_CORREGO; muniName = "Córrego do Bom Jesus - MG"; }
+            else if (currentMuniId === 'delfim_moreira') { data = POEPS_PLAN_DATA_DELFIM; muniName = "Delfim Moreira - MG"; }
+            else if (currentMuniId === 'pedralva') { data = POEPS_PLAN_DATA_PEDRALVA; muniName = "Pedralva - MG"; }
+            
+            document.getElementById('modal-title').innerText = "POEPS - Planejamento Mensal";
+            document.getElementById('modal-subtitle').innerText = `Município: ${muniName}`;
+            
+            if (data.length > 0) {
+                let html = campaign ? `<div class="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center gap-2"><span class="text-xl">🧠</span><span class="text-xs font-bold text-blue-700 uppercase tracking-wider">Campanha do Mês: ${campaign}</span></div>` : "";
+                html += `<div class="bg-white rounded-[2rem] border shadow-sm overflow-hidden overflow-x-auto no-scrollbar"><table class="poeps-table min-w-[1000px]"><thead><tr><th>IND</th><th>INDICADOR</th><th>META DO MÊS / QUANTIDADE</th><th>AÇÃO</th><th>RESPONSÁVEL</th><th>REGISTRO</th></tr></thead><tbody>${data.map(d => `<tr><td class="text-center font-black text-slate-400">${d.id}</td><td class="font-bold text-slate-700">${d.ind}</td><td class="font-bold text-blue-600">${d.qtd}<br><span class="text-[9px] text-slate-400 font-normal uppercase">${d.meta || '-'}</span></td><td class="text-slate-600">${d.acao}</td><td class="text-slate-600 font-semibold">${d.resp}</td><td class="text-xs text-slate-500 italic">${d.reg}</td></tr>`).join('')}</tbody></table></div>`;
+                document.getElementById('modal-body').innerHTML = html;
+            } else { document.getElementById('modal-body').innerHTML = `<div class="p-6 text-center text-slate-400 italic">Planejamento não disponível.</div>`; }
+        }
+
+        function renderPoepsEval() {
+            let data = []; let muniName = "";
+            if (currentMuniId === 'camanducaia') { data = POEPS_EVAL_DATA_CAM; muniName = "Camanducaia - MG"; }
+            else if (currentMuniId === 'itapeva') { data = POEPS_EVAL_DATA_ITAPEVA; muniName = "Itapeva - MG"; }
+            else if (currentMuniId === 'cachoeira_de_minas') { data = POEPS_EVAL_DATA_CACHOEIRA; muniName = "Cachoeira de Minas - MG"; }
+            else if (currentMuniId === 'corrego_bom_jesus') { data = POEPS_EVAL_DATA_CORREGO; muniName = "Córrego do Bom Jesus - MG"; }
+            else if (currentMuniId === 'delfim_moreira') { data = POEPS_EVAL_DATA_DELFIM; muniName = "Delfim Moreira - MG"; }
+            else if (currentMuniId === 'pedralva') { data = POEPS_EVAL_DATA_PEDRALVA; muniName = "Pedralva - MG"; }
+            
+            document.getElementById('modal-title').innerText = "POEPS - Avaliação Mês Anterior";
+            document.getElementById('modal-subtitle').innerText = `Resultados Regionais - ${muniName}`;
+            
+            if (data.length > 0) {
+                document.getElementById('modal-body').innerHTML = `
+                <div class="bg-white rounded-3xl border shadow-sm overflow-hidden mb-6">
+                    <div class="p-4 bg-orange-600 text-white flex items-center gap-2">
+                        <span class="text-lg">📊</span>
+                        <span class="text-xs font-black tracking-widest uppercase">Monitoramento de Resultados (Dezembro)</span>
+                    </div>
+                    <div class="overflow-x-auto no-scrollbar">
+                        <table class="poeps-table min-w-[1000px]">
+                            <thead>
+                                <tr>
+                                    <th>IND</th>
+                                    <th>DESCRIÇÃO DO INDICADOR</th>
+                                    <th>META DO MÊS</th>
+                                    <th>ATIVIDADES REALIZADAS</th>
+                                    <th>CUMPRIU?</th>
+                                    <th>AÇÕES PENDENTES</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-slate-600">
+                                ${data.map(d => `
+                                <tr>
+                                    <td class="font-black text-center text-slate-400">${d.id}</td>
+                                    <td class="font-bold text-slate-700 text-xs">${d.ind}</td>
+                                    <td class="font-bold text-slate-600">${d.meta}</td>
+                                    <td class="font-bold text-blue-600 text-xs">${d.real}</td>
+                                    <td class="text-center font-black ${d.status === null ? 'text-slate-400' : (d.status ? 'text-green-600' : 'text-red-600')}">
+                                        ${d.status === null ? '--' : (d.status ? 'SIM' : 'NÃO')}
+                                    </td>
+                                    <td class="font-bold text-red-500">${d.pendente}</td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            } else { document.getElementById('modal-body').innerHTML = `<div class="bg-white p-6 rounded-3xl border shadow-sm text-center italic text-slate-400">Dados de monitoramento regional para avaliação não disponíveis.</div>`; }
+        }
+
+        function renderPSE() {
+            let schools = [];
+            if (currentMuniId === 'camanducaia') { schools = PSE_SCHOOLS_CAM[currentTeamId] || ["Escola Pactuada do Território"]; }
+            else if (currentMuniId === 'itapeva') { schools = PSE_SCHOOLS_ITAPEVA[currentTeamId] || ["Escola do Território - Itapeva"]; }
+            else if (currentMuniId === 'cachoeira_de_minas') { schools = PSE_SCHOOLS_CM[currentTeamId] || ["Escolas Pactuadas de Cachoeira de Minas"]; }
+            else if (currentMuniId === 'corrego_bom_jesus') { schools = PSE_SCHOOLS_CBJ[currentTeamId] || ["Escola Pactuada do Território"]; }
+            else if (currentMuniId === 'delfim_moreira') { schools = PSE_SCHOOLS_DM[currentTeamId] || ["Escola Pactuada do Território"]; }
+            else { schools = ["Escolas Pactuadas do Município"]; }
+            
+            const acao = "Avaliar resultados das ações do 2º semestre de 2025-GTIM"; 
+            const acaoCorrespondente = "Reunião Intersetorial"; 
+            const registro = "Ficha de Atividade Coletiva";
+            
+            document.getElementById('modal-title').innerText = "Programa Saúde na Escola (PSE)";
+            document.getElementById('modal-subtitle').innerText = `Ações Programadas - ${MUNI_CONFIG[currentMuniId].name}`;
+            
+            const rows = schools.map(school => `<tr><td class="font-bold text-slate-700 text-xs">${school}</td><td class="text-slate-600 text-xs">${acao}</td><td class="text-blue-600 font-bold text-xs bg-blue-50/50">${acaoCorrespondente}</td><td class="text-slate-500 italic text-xs">${registro}</td></tr>`).join('');
+            
+            document.getElementById('modal-body').innerHTML = `
+                <div class="bg-white rounded-[2rem] border shadow-sm overflow-hidden overflow-x-auto no-scrollbar">
+                    <div class="p-4 bg-teal-600 text-white flex items-center gap-2">
+                        <span class="text-lg">🏫</span>
+                        <span class="text-xs font-black tracking-widest uppercase">Planejamento PSE</span>
+                    </div>
+                    <table class="poeps-table min-w-[600px]">
+                        <thead>
+                            <tr>
+                                <th class="w-1/3">ESCOLA PACTUADA</th>
+                                <th>AÇÃO</th>
+                                <th>AÇÕES DO PSE CORRESPONDENTES</th>
+                                <th>REGISTRO</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+        
+        window.onload = () => {
+            const passInput = document.getElementById('setup-pass');
+            if(passInput) {
+                passInput.focus();
+                passInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+            }
+        };
+    </script>
+</body>
+</html>
