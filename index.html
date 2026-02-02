@@ -879,19 +879,13 @@
         // --- NOVO MODAL: Exemplos de Atividades em Saúde ---
         function renderEduExamples() {
             document.getElementById('modal-title').innerText = "Educação em Saúde";
-            document.getElementById('modal-subtitle').innerText = "Sugestões de Atividades: Cultura de Paz e Prevenção da Violência";
+            document.getElementById('modal-subtitle').innerText = "Sugestões de Atividades: Saúde Ambiental";
             
             const items = [
-                { t: "Rodas de conversa “Cultura de Paz no Território”", d: "Conteúdos possíveis: comunicação não-violenta, respeito às diferenças, convivência comunitária, direitos e deveres, onde buscar ajuda." },
-                { t: "Grupo de famílias sobre parentalidade positiva", d: "Eixos: manejo do estresse parental, disciplina sem violência, rotinas, acolhimento emocional, sinais de violência e proteção." },
-                { t: "Para adolescentes: “Relacionamentos saudáveis”", d: "Temas: bullying/cyberbullying, masculinidades, consentimento, autocuidado, redes de apoio e proteção, mediação de conflitos." },
-                { t: "Para mulheres: prevenção de violência doméstica", d: "Conteúdos: ciclo da violência, sinais de risco, plano de segurança, fortalecimento de rede de apoio." },
-                { t: "Para homens: paternidade e manejo da raiva", d: "Temas: paternidade ativa, desconstrução de estereótipos, prevenção de violência." },
-                { t: "“Café com a Comunidade”", d: "Objetivo: identificar fatores de risco comunitários (pontos inseguros, brigas recorrentes, violência no entorno da escola)." },
-                { t: "Prevenção de acidentes e Cultura de Paz", d: "Vínculo com cuidado integral (infância/idoso). O MS trata prevenção de violências incluindo prevenção de acidentes." },
-                { t: "Para idosos: direitos e prevenção", d: "Temas: prevenção de violência financeira, negligência e direitos da pessoa idosa." },
-                { t: "Foco em equidade e direitos humanos", d: "Público: LGBTQIA+, população negra, PCDs, migrantes. Tema: violência institucional, acesso com respeito, acolhimento sem discriminação." },
-                { t: "Para a equipe: “Acolhimento e abordagem”", d: "Objetivo: alinhar linguagem, escuta qualificada, sinais de alerta, fluxos e rede intersetorial." }
+                { t: "Saúde Ambiental na UBS", d: "Transformar a UBS em um espaço interativo por algumas horas — algo leve, sem formato de palestra. Trabalhar temáticas como: Combate à dengue, Água segura — demonstração do hipoclorito, Descarte correto do lixo e Cuidado com animais e zoonoses." },
+                { t: "Oficina Comunitária: Casa Saudável ", d: "Ensinar de forma prática como transformar a casa em um ambiente protetor. DICA: Monte uma “casa fictícia” com imagens ou objetos e peça para que encontrem os riscos - pratinho de planta com água, lixo aberto, caixa d’água destampada, entulho, etc." },
+                { t: "Ação com Crianças — os melhores multiplicadores", d: "Caça ao mosquito (buscar focos fictícios), desenho “minha casa saudável”, teatrinho curto" },
+                { t: "Salas de Espera", d: "Trabalhar a temática de Combate ao Aedes Aegypti" }
             ];
 
             const listHtml = items.map((item, idx) => `
@@ -1199,4 +1193,5 @@
 </body>
 
 </html>
+
 
